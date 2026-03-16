@@ -1,0 +1,27 @@
+[submodule "thirdparty/asio"]
+	path = thirdparty/asio
+	url = https://bgithub.xyz/chriskohlhoff/asio.git
+[submodule "thirdparty/nanopb"]
+	path = thirdparty/nanopb
+	url = https://bgithub.xyz/nanopb/nanopb.git
+[submodule "thirdparty/libhv"]
+	path = thirdparty/libhv
+	url = https://bgithub.xyz/ithewei/libhv.git
+[submodule "thirdparty/libzmq"]
+	path = thirdparty/libzmq
+	url = https://bgithub.xyz/zeromq/libzmq.git
+[submodule "thirdparty/nng"]
+	path = thirdparty/nng
+	url = https://bgithub.xyz/nanomsg/nng.git
+[submodule "thirdparty/shm_container"]
+	path = thirdparty/shm_container
+	url = https://bgithub.xyz/mikewei/shm_container.git
+[submodule "thirdparty/thread-pool"]
+	path = thirdparty/thread-pool
+	url = https://bgithub.xyz/bshoshany/thread-pool.git
+[submodule "thirdparty/readerwriterqueue"]
+	path = thirdparty/readerwriterqueue
+	url = https://bgithub.xyz/cameron314/readerwriterqueue.git
+[submodule "thirdparty/concurrentqueue"]
+	path = thirdparty/concurrentqueue
+	url = https://bgithub.xyz/cameron314/concurrentqueue.git

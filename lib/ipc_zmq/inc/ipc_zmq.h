@@ -1,0 +1,108 @@
+#pragma once
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#include <stdint.h>
+#include <stdlib.h>
+
+#define D_IPC_ZMQ_MODULE_NAME (64)
+
+typedef enum _ipc_zmq_module_id_e
+{
+    E_IPC_ZMQ_MODULE_ID_INVALID = 0,
+
+    E_IPC_ZMQ_MODULE_ID_MANAGER = 1,
+    E_IPC_ZMQ_MODULE_ID_TEST1 = 2,
+    E_IPC_ZMQ_MODULE_ID_TEST2 = 3,
+
+    E_IPC_ZMQ_MODULE_ID_MAX
+} ipc_zmq_module_id_e;
+
+typedef enum _ipc_zmq_msg_type_e
+{
+    E_IPC_ZMQ_MSG_TYPE_INVALID = 0,
+    E_IPC_ZMQ_MSG_TYPE_NOTIFY,    // notify
+    E_IPC_ZMQ_MSG_TYPE_SYNC,      // sync
+    E_IPC_ZMQ_MSG_TYPE_ASYNC,     // async
+    E_IPC_ZMQ_MSG_TYPE_BROADCAST, // broadcast
+    E_IPC_ZMQ_MSG_TYPE_STREAM,    // stream
+} ipc_zmq_msg_type_e;
+
+typedef enum _ipc_zmq_msg_id_e
+{
+    E_IPC_ZMQ_MSG_ID_INVALID = 0,
+    E_IPC_ZMQ_MSG_ID_HEARTBEAT = 1,
+    E_IPC_ZMQ_MSG_ID_TEST_NOTIFY = 2,
+    E_IPC_ZMQ_MSG_ID_TEST_SYNC = 3,
+    E_IPC_ZMQ_MSG_ID_TEST_ASYNC = 4,
+    E_IPC_ZMQ_MSG_ID_TEST_BROADCAST = 5,
+    E_IPC_ZMQ_MSG_ID_TEST_STREAM = 6,
+} ipc_zmq_msg_id_e;
+
+typedef enum _ipc_zmq_workmode_e
+{
+    E_IPC_ZMQ_WORKMODE_SINGLE_WORKER = 1,
+    E_IPC_ZMQ_WORKMODE_MULT_WORKER = 2,
+} ipc_zmq_workmode_e;
+
+typedef struct _ipc_zmq_broadcast_msg_baseinfo_t
+{
+    uint8_t sub; // "1" mean broadcast
+    uint32_t src_id;
+    uint32_t msg_type;
+    uint32_t msg_id;
+} ipc_zmq_broadcast_msg_baseinfo_t;
+
+typedef struct _ipc_zmq_msg_baseinfo_t
+{
+    uint32_t src_id;
+    uint32_t dest_id;
+    uint32_t msg_type;
+    uint32_t msg_id;
+    size_t send_len;
+    size_t recv_len;
+} ipc_zmq_msg_baseinfo_t;
+
+// clang-format off
+typedef void (*PF_IPC_ZMQ_NOTIFY_HANDLER)(ipc_zmq_msg_baseinfo_t *msg_baseinfo, const uint8_t *notify_data);
+typedef void (*PF_IPC_ZMQ_ASYNC_HANDLER)(ipc_zmq_msg_baseinfo_t *msg_baseinfo, uint8_t *response_data);
+typedef void (*PF_IPC_ZMQ_BROADCAST_HANDLER)(ipc_zmq_broadcast_msg_baseinfo_t *bmsg_baseinfo, const uint8_t *broadcast_data);
+typedef void (*PF_IPC_ZMQ_RESPONSE_HANDLER)(ipc_zmq_msg_baseinfo_t *msg_baseinfo, const uint8_t *indata, uint8_t *outdata);
+typedef void (*PF_IPC_ZMQ_STREAM_HANDLER)(ipc_zmq_msg_baseinfo_t *msg_baseinfo, const uint8_t *stream_data);
+// clang-format on
+
+typedef struct _ipc_zmq_register_info_t
+{
+    uint32_t module_id; // see ipc_zmq_module_id_e
+    char module_name[D_IPC_ZMQ_MODULE_NAME];
+    uint32_t work_mode;
+    // async/sync/notify, it is a RPC impl
+    PF_IPC_ZMQ_NOTIFY_HANDLER notify_handler;
+    PF_IPC_ZMQ_RESPONSE_HANDLER response_handler;
+    PF_IPC_ZMQ_ASYNC_HANDLER async_handler;
+    PF_IPC_ZMQ_BROADCAST_HANDLER broadcast_handler;
+    PF_IPC_ZMQ_STREAM_HANDLER stream_handler;
+} ipc_zmq_register_info_t;
+
+/*
+req          rep          type                          timeout    class
+null/data    null         wait                          fixed      notify(fixed sync)
+null/data    null         wait                          unfixed    stream(接收方收到消息先回复响应)
+null/data    null/data    wait                          unfixed    sync
+null/data    null/data    nowait(another thread wait)   fixed      async
+*/
+
+int32_t ipc_zmq_init(ipc_zmq_register_info_t *reg_info);
+int32_t ipc_zmq_destroy(uint32_t module_id);
+int32_t ipc_zmq_send_notify(uint32_t src_id, uint32_t dest_id, uint32_t msg_id, const void *notify_data, size_t notify_data_len);
+int32_t ipc_zmq_send_sync(uint32_t src_id, uint32_t dest_id, uint32_t msg_id, const void *sync_req_data, size_t sync_req_data_len, void *sync_resp_data, size_t *sync_resp_data_len, size_t sync_resp_data_max_len, long timeout);
+int32_t ipc_zmq_send_async(uint32_t src_id, uint32_t dest_id, uint32_t msg_id, const void *async_req_data, size_t async_req_data_len, size_t async_resp_data_len);
+int32_t ipc_zmq_send_stream(uint32_t src_id, uint32_t dest_id, uint32_t msg_id, const void *stream_data, size_t stream_data_len, long timeout);
+int32_t ipc_zmq_send_broadcast(uint32_t src_id, uint32_t msg_id, const void *broadcast_data, size_t broadcast_data_len);
+
+#ifdef __cplusplus
+}
+#endif

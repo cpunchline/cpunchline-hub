@@ -1,0 +1,5 @@
+edition = "2024"                  # 设置 Rust 版本(根据实际项目版本进行调整)
+max_width = 120                   # 设置最大行宽为 120 个字符
+hard_tabs = false                 # 是否使用硬制表符进行缩进
+tab_spaces = 4                    # 设置缩进宽度为 4 个空格
+newline_style = "Unix"            # 设置换行符风格为\n

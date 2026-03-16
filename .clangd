@@ -1,0 +1,37 @@
+CompileFlags:
+  Add:
+    - -Wall -Wextra -Wuninitialized -Wno-unused-function -Wredundant-decls -Wdate-time
+    - -Wformat=2 -Wformat-security
+    - -Wsign-conversion -Wfloat-equal -Wfloat-conversion -Wconversion
+    - -Waddress -Warray-bounds -Wdiv-by-zero -Wshadow -Wswitch-enum -Wswitch-default -Wfree-nonheap-object -Wsizeof-pointer-div
+    - -D_FORTIFY_SOURCE=2 -fstack-protector-strong
+    - -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now
+  # - -I项目头文件
+  Remove:
+    - -Werror
+  # CompilationDatabase: build/compile_commands.json
+Diagnostics:
+  # Suppress: '*' # * 禁用所有规则
+  UnusedIncludes: None # 未使用的头文件不报错
+  ClangTidy:
+    Add:
+      [
+        # 检查列表
+        # readability-identifier*,
+        # cppcoreguidelines-*,
+        # performance-*,
+        # bugprone-*,
+        # portability-*,
+        # modernize-*,
+        # google-*,
+      ]
+    Remove:
+      [
+        # 检查列表中需要屏蔽的特定检查
+      ]
+    CheckOptions:
+      # readability-identifier-naming.VariableCase: lower_case
+      # readability-identifier-naming.FunctionCase: lower_case
+      readability-function-size.StatementThreshold: 150 # 函数最大行数
+      readability-function-size.ParameterThreshold: 5   # 函数最多参数数量
+    FastCheckFilter: None # Strict仅快速/Loose已知慢/None无论多慢, 都静态检查

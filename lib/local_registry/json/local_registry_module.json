@@ -1,0 +1,214 @@
+{
+    "Module": {
+        "name": "local_registry",
+        "id": "0"
+    },
+    "ProviderService": [
+        {
+            "type": "METHOD",
+            "name": "REGISTER_CLIENT",
+            "in": "st_register_client_req",
+            "out": "st_register_client_resp"
+        },
+        {
+            "type": "METHOD",
+            "name": "GET_CLIENT",
+            "in": "st_get_client_req",
+            "out": "st_get_client_resp"
+        },
+        {
+            "type": "METHOD",
+            "name": "REGISTER_SERVICE",
+            "in": "st_register_service",
+            "out": null
+        },
+        {
+            "type": "METHOD",
+            "name": "LISTEN_SERVICE",
+            "in": "st_listen_service",
+            "out": null
+        },
+        {
+            "type": "METHOD",
+            "name": "GET_SERVICE",
+            "in": "st_get_service_req",
+            "out": "st_get_service_resp"
+        },
+        {
+            "type": "METHOD",
+            "name": "SERVICE_SET_STATUS",
+            "in": "st_service_set_status",
+            "out": null
+        },
+        {
+            "type": "METHOD",
+            "name": "SERVICE_CHANGE_STATUS",
+            "in": "st_service_change_status",
+            "out": null
+        },
+        {
+            "type": "METHOD",
+            "name": "LISTENER_CHANGE_TO_PROVIDER",
+            "in": "st_listener_change_to_provider",
+            "out": null
+        },
+        {
+            "type": "METHOD",
+            "name": "CTRL_GET_CLIENTS",
+            "in": "st_ctrl_get_clients",
+            "out": null
+        },
+        {
+            "type": "METHOD",
+            "name": "CTRL_GET_SERVICES",
+            "in": "st_ctrl_get_services",
+            "out": null
+        }
+    ],
+    "StructDef": {
+        "st_local_msg_header": {
+            "msg_id": "uint32",
+            "msg_len": "uint32"
+        },
+        "st_local_service_item": {
+            "service_id": "uint32",
+            "service_type": "uint32",
+            "service_status": "uint32"
+        },
+        "st_local_client_item": {
+            "client_id": "uint32",
+            "client_pid": "int32",
+            "client_name": {
+                "array": {
+                    "string": 32
+                }
+            },
+            "client_status": "uint32"
+        },
+        "st_local_client_info": {
+            "client_id": "uint32",
+            "client_pid": "int32",
+            "client_name": {
+                "array": {
+                    "string": 32
+                }
+            },
+            "client_status": "uint32",
+            "produce_services": {
+                "array": {
+                    "st_local_service_item": 128
+                }
+            }
+        },
+        "st_local_service_info": {
+            "service": "st_local_service_item",
+            "provider_client": "st_local_client_item",
+            "listener_clients": {
+                "array": {
+                    "st_local_client_item": 128
+                }
+            }
+        },
+        "st_local_registry_msg_ack": {
+            "dummy": "uint32"
+        },
+        "st_register_client_req": {
+            "client_pid": "int32",
+            "client_name": {
+                "array": {
+                    "string": 32
+                }
+            }
+        },
+        "st_register_client_resp": {
+            "client_pid": "int32",
+            "client_id": "uint32"
+        },
+        "st_get_client_req": {
+            "client_id": "uint32"
+        },
+        "st_get_client_resp": {
+            "responser_client": "st_local_client_item"
+        },
+        "st_register_service": {
+            "produce_services": {
+                "array": {
+                    "st_local_service_item": 128
+                }
+            },
+            "provider_client": "st_local_client_item",
+            "reg": "bool"
+        },
+        "st_listen_service": {
+            "listen_services": {
+                "array": {
+                    "st_local_service_item": 128
+                }
+            },
+            "listener_client": "st_local_client_item",
+            "reg": "bool"
+        },
+        "st_get_service_req": {
+            "service_id": "uint32",
+            "listener_client": "st_local_client_item"
+        },
+        "st_get_service_resp": {
+            "service": "st_local_service_item",
+            "provider_client": "st_local_client_item"
+        },
+        "st_service_set_status": {
+            "services": {
+                "array": {
+                    "st_local_service_item": 128
+                }
+            },
+            "provider_client": "st_local_client_item"
+        },
+        "st_service_change_status": {
+            "service": "st_local_service_item",
+            "provider_client": "st_local_client_item"
+        },
+        "st_listener_change_to_provider": {
+            "service_id": "uint32",
+            "listener_clients": {
+                "array": {
+                    "st_local_client_item": 128
+                }
+            },
+            "reg": "bool"
+        },
+        "st_ctrl_get_clients": {
+            "clients": {
+                "array": {
+                    "st_local_client_info": 1
+                }
+            },
+            "more_flag": "uint32"
+        },
+        "st_ctrl_get_services": {
+            "services": {
+                "array": {
+                    "st_local_service_info": 1
+                }
+            },
+            "more_flag": "uint32"
+        }
+    },
+    "EnumDef": {
+        "LOCAL_SERVICE_TYPE": {
+            "UNKNOWN": 0,
+            "METHOD": 1,
+            "EVENT": 2
+        },
+        "LOCAL_SERVICE_STATUS": {
+            "DEFAULT": 0,
+            "AVAILABLE": 1,
+            "UNAVAILABLE": 2
+        },
+        "LOCAL_CLIENT_STATUS": {
+            "INIT": 0,
+            "ONLINE": 1,
+            "OFFLINE": 2
+        }
+    }
+}

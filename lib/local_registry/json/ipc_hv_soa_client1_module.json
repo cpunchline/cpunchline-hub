@@ -1,0 +1,52 @@
+{
+    "Module": {
+        "name": "ipc_hv_soa_client1",
+        "id": "1"
+    },
+    "ProviderService": [
+        {
+            "type": "METHOD",
+            "name": "TEST_METHOD_1",
+            "in": null,
+            "out": "st_test_method_1_resp"
+        },
+        {
+            "type": "EVENT",
+            "name": "TEST_EVENT_1",
+            "in": null
+        }
+    ],
+    "StructDef": {
+        "st_test_struct": {
+            "value": "st_oneof_test_union"
+        },
+        "st_test_struct1": {
+            "value": "int32"
+        },
+        "st_test_struct_array": {
+            "test_array": {
+                "array": {
+                    "st_test_struct1": 32
+                }
+            }
+        },
+        "st_test_method_1_resp": {
+            "value": "int32"
+        }
+    },
+    "UnionDef": {
+        "st_oneof_test_union": {
+            "union1": "int32",
+            "union2": "uint32",
+            "union3": "float",
+            "union4": {
+                "array": {
+                    "string": 32
+                }
+            },
+            "union5": "st_test_method_1_resp",
+            "union6": "st_test_struct_array"
+        }
+    },
+    "EnumDef": {}
+}

@@ -1,0 +1,4 @@
+#pragma once
+
+#define CPUNCHLINE_BUILD_TIME "@BUILD_TIME@"
+#define CPUNCHLINE_VERSION    "@CPUNCHLINE_VERSION@"

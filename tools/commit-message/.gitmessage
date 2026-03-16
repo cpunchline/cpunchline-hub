@@ -1,0 +1,17 @@
+# etc.
+[IssueNo]:
+#
+# 模块名
+[Module]:
+#
+# 类型 feat(新特性)/fix(问题修复)/perf(优化)/refactor(重构)/test(测试)/style(代码格式)/docs(文档)/tools(工具)/other
+[Type]:
+#
+# 问题
+[Subject]:
+#
+# 问题原因
+[RootCause]:
+#
+# 解决措施
+[Solution]:

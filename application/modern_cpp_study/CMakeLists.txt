@@ -1,0 +1,7 @@
+add_subdirectory(ConcurrentProgramming)
+add_subdirectory(error_code)
+add_subdirectory(local_variable_init)
+add_subdirectory(memory_resource)
+add_subdirectory(random)
+add_subdirectory(reflection)
+add_subdirectory(Templete)

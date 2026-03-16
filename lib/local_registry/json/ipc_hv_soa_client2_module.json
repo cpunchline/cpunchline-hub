@@ -1,0 +1,25 @@
+{
+    "Module": {
+        "name": "ipc_hv_soa_client2",
+        "id": "2"
+    },
+    "ProviderService": [
+        {
+            "type": "METHOD",
+            "name": "TEST_METHOD_2",
+            "in": null,
+            "out": "st_test_method_2_resp"
+        },
+        {
+            "type": "EVENT",
+            "name": "TEST_EVENT_2",
+            "in": null
+        }
+    ],
+    "StructDef": {
+        "st_test_method_2_resp": {
+            "value": "int32"
+        }
+    },
+    "EnumDef": {}
+}

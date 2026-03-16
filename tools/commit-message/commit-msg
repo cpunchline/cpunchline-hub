@@ -1,0 +1,139 @@
+#!/bin/sh
+
+test "" = "$(grep '^Signed-off-by: ' "$1" |
+	sort | uniq -c | sed -e '/^[   ]*1[    ]/d')" || {
+	echo >&2 Duplicate Signed-off-by lines.
+	exit 1
+}
+
+commit_msg_file="$1"
+commit_msg="$(cat ${commit_msg_file})"
+this_key=""
+this_value=""
+formatted_commit_msg=""
+error_count=0
+
+# Check email.
+email="$(git config user.email)"
+email_test="$(echo ${email} | awk -F @ '{print $2}')"
+email_suffix="foxmail.com;"
+
+if [ -z "$(echo ${email_suffix} | grep ${email_test})" ]; then
+	echo "Commit error: user.email of ${email} was not in whitelist: ${email_suffix}"
+	echo "Tips: You can copy with following contents for the next commit."
+	echo "====================== C0MMIT MESSAGE START ======================"
+	cat ${commit_msg_file}
+	echo "====================== C0MMIT MESSAGE END ======================"
+	exit 2
+fi
+
+# Check commit key-val
+# $1: key words of key
+msg_validate_keyval() {
+	local _key="$1"
+	this_key=""
+	this_value=""
+
+	# Part1:Check if key was missed.
+	key_str=$(echo "${commit_msg}" | grep "\[${_key}\]:" | awk -F : '{print $1}')
+	[ -z "${key_str}" ] && {
+		echo "Commit error: key of '[${_key}]:' was missed!"
+		return 1
+	}
+
+	# Part2:Check if value is empty.
+	val_str=$(echo "${commit_msg}" | grep "\[${_key}\]:" | awk -F : '{print $2}' | grep -oE "[^ ].*[^ ]")
+	[ -z "${val_str}" ] && {
+		echo "Commit error: value of '[${_key}]:' was empty!"
+		return 2
+	}
+
+	# Part3:Check if value is NA.
+	if echo "${val_str}" | grep -qEi "^(NA|None)"; then
+		echo "Commit error: value of '[${_key}]:' should not be NA!"
+		return 3
+	fi
+
+	this_key="${key_str}"
+	this_value="${val_str}"
+
+	return 0
+}
+
+# $1 key
+# $2 value
+append_formatted_msg() {
+	formatted_commit_msg="${formatted_commit_msg}\n$1:$2"
+}
+
+msg_validate_keyval "IssueNo"
+if [ $? -eq 0 ]; then
+	append_formatted_msg "${this_key}" "${this_value}"
+else
+	error_count=$((error_count + 1))
+fi
+
+msg_validate_keyval "Module"
+if [ $? -eq 0 ]; then
+	body_module=${this_value}
+	append_formatted_msg "${this_key}" "${this_value}"
+else
+	error_count=$((error_count + 1))
+fi
+
+msg_validate_keyval "Type"
+if [ $? -eq 0 ]; then
+	body_type=${this_value}
+	if echo "${body_type}" | grep -qE "^(feat|fix|perf|refactor|test|style/docs/tools|other)$"; then
+		append_formatted_msg "${this_key}" "${this_value}"
+	fi
+else
+	error_count=$((error_count + 1))
+fi
+
+msg_validate_keyval "Subject"
+if [ $? -eq 0 ]; then
+	body_subject=${this_value}
+	append_formatted_msg "${this_key}" "${this_value}"
+else
+	error_count=$((error_count + 1))
+fi
+
+msg_validate_keyval "RootCause"
+if [ $? -eq 0 ]; then
+	body_cause=${this_value}
+	append_formatted_msg "${this_key}" "${this_value}"
+else
+	error_count=$((error_count + 1))
+fi
+
+msg_validate_keyval "Solution"
+if [ $? -eq 0 ]; then
+	body_solution=${this_value}
+	append_formatted_msg "${this_key}" "${this_value}"
+else
+	error_count=$((error_count + 1))
+fi
+
+if [ -n "${body_subject}" ] && [ -n "${body_cause}" ] && [ -n "${body_solution}" ]; then
+	if [ "${body_subject}" == "${body_cause}" ] || [ "${body_cause}" == "${body_solution}" ] || [ "${body_subject}" == "${body_solution}" ]; then
+		echo "Commit error: value of '[Subject]/[RootCause]/[Solution]' should not be same!"
+		error_count=$((error_count + 1))
+	fi
+fi
+
+if [ ${error_count} -gt 0 ]; then
+	echo "Commit error: ${error_count} errors occurred, fix and try again!"
+	echo "Tips: You can copy with following contents for the next commit."
+	echo "====================== C0MMIT MESSAGE START ======================"
+	cat ${commit_msg_file}
+	echo "====================== C0MMIT MESSAGE END ======================"
+	exit 3
+fi
+
+commit_title="${body_module}(${body_type}): ${body_solution}\n\n"
+
+echo -e "${commit_title}" >${commit_msg_file}
+echo -e "${formatted_commit_msg}" >>${commit_msg_file}
+
+exit 0

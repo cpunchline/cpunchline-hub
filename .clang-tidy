@@ -1,0 +1,11 @@
+---
+# 静态检查规则清单
+# 在参数前加入-, 如-modernize-use-trailing-return-type, 将会禁用某一规则
+# 参数后部分的*表示通配符
+# 注释不要加载行尾!!!
+
+Checks: "-*,
+bugprone-argument-comment,
+"
+HeaderFilterRegex: 'Source/cm[^/]*\.(h|hxx|hpp|c|cc|cxx|cpp)$'
+...

@@ -1,0 +1,59 @@
+#pragma once
+
+#include <functional>
+#include <memory>
+#include <string>
+#include <list>
+#include <unordered_set>
+
+#include <cstring>
+#include <inttypes.h>
+
+#include "hv/hobjectpool.h"
+#include "UdsServer.hpp"
+#include "UdsClient.hpp"
+
+#include "utility/utils.h"
+#include "utility/debug_backtrace.h"
+
+#include "pb_decode.h"
+#include "pb_encode.h"
+#include "local_registry_module.pb.h"
+
+#include "Singleton.hpp"
+#include "ThreadQueue.hpp"
+
+#ifndef NANOPB_SUPPORT_OPTION
+#define NANOPB_SUPPORT_OPTION (1)
+#endif
+
+#ifndef LOCAL_REGISTRY_MSG_SIZE_MAX
+#define LOCAL_REGISTRY_MSG_SIZE_MAX (8 * 1024) // 8 K
+#endif
+
+const constexpr std::size_t LOCAL_REGISTRY_DAEMON_HV_LOOP_NUM_MAX = 0;
+const constexpr std::size_t LOCAL_REGISTRY_CLIENT_HV_LOOP_NUM_MAX = 4;
+const constexpr std::size_t LOCAL_REGISTRY_MSG_HEADER_SIZE = sizeof(st_local_msg_header);
+const constexpr std::size_t LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE = sizeof(uint32_t) * 5; // client_id, msg_seqid, msg_type, service_id, msgdata_len
+
+// service_id[4 bytes] = module_id[high 2 bytes] + msg_id[low 2 bytes];
+#define MODULE_ID_MAX          (UINT16_MAX)
+#define EACH_MODULE_MSG_ID_MAX (UINT16_MAX)
+
+#define LOCAL_REGISTRY_SOCKET_LEN_MAX   (108)
+#define LOCAL_REGISTRY_CLIENT_NAME_MAX  (32)
+#define SOCKET_PATH_PREFIX              "/tmp/"
+#define LOCAL_REGISTRY_SOCKET_FILE      "local_registry.ipc"
+#define LOCAL_REGISTRY_SOCKET_PATH      SOCKET_PATH_PREFIX LOCAL_REGISTRY_SOCKET_FILE
+#define LOCAL_REGISTRY_CTRL_SOCKET_FILE "local_registry_ctrl.ipc"
+#define LOCAL_REGISTRY_CTRL_SOCKET_PATH SOCKET_PATH_PREFIX LOCAL_REGISTRY_CTRL_SOCKET_FILE
+
+#define LOCAL_REGISTEY_SOCKET_FMT  SOCKET_PATH_PREFIX "%u-%s.ipc"       // communication with daemon     : client_pid-client_name.ipc
+#define LOCAL_REGISTEY_SOCKET_FMT1 SOCKET_PATH_PREFIX "%u-listen-1.ipc" // listen                        : client_id-listen-1.ipc
+#define LOCAL_REGISTEY_SOCKET_FMT2 SOCKET_PATH_PREFIX "%u-%s-%u-2.ipc"  // communication with each other : client_src_id-client_name-client_target_id-2.ipc
+
+#define LOCAL_REGISTRY_CLIENT_ONCE_COUNT_MAX                  (128) // client count max
+#define LOCAL_REGISTRY_CLIENT_PROVIDE_SERVICES_ONCE_COUNT_MAX (128) // one client can provider max 128 services
+#define LOCAL_REGISTRY_CLIENT_CONSUME_SERVICES_ONCE_COUNT_MAX (128) // one client can consumer max 128 services
+
+#define LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS (1500)
