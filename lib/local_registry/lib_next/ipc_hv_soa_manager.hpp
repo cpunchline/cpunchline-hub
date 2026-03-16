@@ -86,6 +86,11 @@ private:
     int32_t send_sync_to_daemon(uint32_t service_id, const void *service_data, const pb_msgdesc_t *req_fileds, uint32_t req_field_size, void *resp_data, uint32_t *resp_data_size);
     int32_t send_async_to_daemon(uint32_t service_id, const void *service_data, const pb_msgdesc_t *fileds, uint32_t field_size);
 
+    // process
+    static void onProcessConnection(const hv::SocketChannelPtr &channel);
+    static void onProcessMessage(const hv::SocketChannelPtr &channel, hv::Buffer *inbuf);
+    static void onProcessWriteComplete(const hv::SocketChannelPtr &channel, hv::Buffer *inbuf);
+
     // local cache
 
     std::mutex m_clients_map_mutex;

@@ -51,12 +51,13 @@ ipc_hv_soa_manager::ipc_hv_soa_manager()
     char client_localaddr[LOCAL_REGISTRY_SOCKET_LEN_MAX] = {};
     snprintf(client_localaddr, sizeof(client_localaddr), LOCAL_REGISTEY_SOCKET_FMT, pid, pname);
 
-    int connfd = m_daemon_client.createsocket(LOCAL_REGISTRY_SOCKET_PATH);
-    if (connfd < 0)
+    int conn_fd = m_daemon_client.createsocket(LOCAL_REGISTRY_SOCKET_PATH);
+    if (conn_fd < 0)
     {
         LOG_PRINT_ERROR("createsocket fail");
         return;
     }
+    LOG_PRINT_INFO("uds client connect on path[%s], conn_fd[%d]", client_localaddr, conn_fd);
 
     m_daemon_client.bind(client_localaddr);
     unpack_setting_t daemon_unpack_setting = {};
@@ -103,6 +104,34 @@ ipc_hv_soa_manager::ipc_hv_soa_manager()
     m_client.client_recv_channel_id = 0;
     m_client.send_msg_seqid = 0;
     m_client.send_msg_map.clear();
+
+    unpack_setting_t process_unpack_setting = {};
+    process_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
+    process_unpack_setting.package_max_length = LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
+    process_unpack_setting.body_offset = LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE;
+    process_unpack_setting.length_field_offset = sizeof(uint32_t) * 4;
+    process_unpack_setting.length_field_bytes = sizeof(uint32_t);
+    process_unpack_setting.length_adjustment = 0;
+    process_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
+
+    int listen_fd = m_listen_server.createsocket(client_localaddr1);
+    if (listen_fd < 0)
+    {
+        LOG_PRINT_ERROR("createsocket fail");
+        return;
+    }
+    LOG_PRINT_INFO("uds server listen on path[%s], listen_fd[%d]", client_localaddr1, listen_fd);
+
+    m_listen_server.onConnection = onProcessConnection;
+    m_listen_server.onMessage = onProcessMessage;
+    m_listen_server.onWriteComplete = onProcessWriteComplete;
+    m_listen_server.setMaxConnectionNum(UINT32_MAX);
+    m_listen_server.setLoadBalance(LB_LeastConnections);
+    m_listen_server.setThreadNum(0);
+    m_listen_server.setUnpack(&process_unpack_setting);
+    LOG_PRINT_INFO("client_id[%d] process start...", resp.client_id);
+    m_listen_server.start(true);
+    LOG_PRINT_INFO("client_id[%d] process start completed", resp.client_id);
 }
 
 ipc_hv_soa_manager::~ipc_hv_soa_manager()
