@@ -14,6 +14,6 @@ RUN  apt-get -y install git curl wget python-is-python3
 RUN  apt-get -y install vim tree zip rar unrar cloc cppcheck
 RUN  apt-get -y install protobuf-compiler python3-protobuf
 
-RUN  apt-get -y install libsqlite3-dev libcjson-dev libgtest-dev libgmock-dev
+RUN  apt-get -y install libsqlite3-dev libcjson-dev libgtest-dev libgmock-dev liburing-dev
 
 # docker build -t ubuntu:cpunchline .
