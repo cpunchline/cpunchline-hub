@@ -5,34 +5,17 @@
 #include "hv/hloop.h"
 #include "hv/hlog.h"
 
-#include "dsa/list.h"
 #include "utility/utils.h"
+#include "utility/syncctxpool.h"
 #include "ipc_hv.h"
 
 #define IPC_HV_LOOP_NUM_MAX        (3) // > 2
 #define IPC_HV_SYNC_CTX_INIT_COUNT (3)
 
-typedef struct _ipc_hv_sync_ctx_t
-{
-    struct list_head list;
-    uint8_t *resp_data;
-    size_t *resp_len;
-    int result; // 0=ok, -1=error
-    hmutex_t mutex;
-    hcondvar_t cond;
-} ipc_hv_sync_ctx_t;
-
-typedef struct _ipc_hv_sync_ctx_pool_t
-{
-    struct list_head head;
-    hmutex_t mutex;
-    size_t alloc_count;
-} ipc_hv_sync_ctx_pool_t;
-
 typedef struct _ipc_hv_manager_info_t
 {
     ipc_hv_register_info_t reg_info;
-    ipc_hv_sync_ctx_pool_t sync_ctx_pool;
+    syncctxpool_t *syncctx_pool;
     hmutex_t s_mutex;
     hloop_t **worker_loops;
     hthread_t *worker_threads;
@@ -41,8 +24,6 @@ typedef struct _ipc_hv_manager_info_t
     bool is_run;
 } ipc_hv_manager_info_t;
 
-static ipc_hv_sync_ctx_t *get_sync_ctx(ipc_hv_id_e id);
-static void put_sync_ctx(ipc_hv_sync_ctx_t *ctx, ipc_hv_id_e id);
 static void on_close(hio_t *io);
 static void on_close_clear(hio_t *io);
 static void on_recv(hio_t *io, void *buf, int readbytes);
@@ -60,59 +41,6 @@ static unpack_setting_t g_unpack_setting = {
     .length_adjustment = 0,
     .length_field_coding = ENCODE_BY_LITTEL_ENDIAN,
 };
-
-static ipc_hv_sync_ctx_t *get_sync_ctx(ipc_hv_id_e id)
-{
-    ipc_hv_sync_ctx_t *idle_ctx = NULL;
-    ipc_hv_sync_ctx_pool_t *pool = &g_ipc_minfo[id]->sync_ctx_pool;
-
-    hmutex_lock(&pool->mutex);
-    if (!list_empty(&pool->head))
-    {
-        idle_ctx = list_first_entry(&pool->head, ipc_hv_sync_ctx_t, list);
-        list_del_init(&idle_ctx->list);
-    }
-    else
-    {
-        idle_ctx = (ipc_hv_sync_ctx_t *)calloc(1, sizeof(ipc_hv_sync_ctx_t));
-        if (NULL == idle_ctx)
-        {
-            hmutex_init(&idle_ctx->mutex);
-            hcondvar_init(&idle_ctx->cond);
-            idle_ctx->result = -1;
-            idle_ctx->resp_data = NULL;
-            idle_ctx->resp_len = NULL;
-            INIT_LIST_HEAD(&idle_ctx->list);
-
-            pool->alloc_count++;
-            LOG_PRINT_DEBUG("SyncCtx Pool expanded. Total alloc: %zu", pool->alloc_count);
-        }
-        else
-        {
-            LOG_PRINT_ERROR("Failed to allocate new sync_ctx (OOM).");
-        }
-    }
-    hmutex_unlock(&pool->mutex);
-
-    return idle_ctx;
-}
-
-static void put_sync_ctx(ipc_hv_sync_ctx_t *ctx, ipc_hv_id_e id)
-{
-    if (NULL == ctx)
-    {
-        return;
-    }
-
-    ctx->resp_data = NULL;
-    ctx->resp_len = NULL;
-    ctx->result = -1;
-
-    ipc_hv_sync_ctx_pool_t *pool = &g_ipc_minfo[id]->sync_ctx_pool;
-    hmutex_lock(&pool->mutex);
-    list_add(&ctx->list, &pool->head);
-    hmutex_unlock(&pool->mutex);
-}
 
 static hloop_t *get_idle_loop(ipc_hv_id_e id)
 {
@@ -287,7 +215,7 @@ static void on_recv_async(hio_t *io, void *buf, int readbytes)
 
     if (p_im_data->msg_type == E_IPC_HV_MSG_TYPE_SYNC_REP)
     {
-        ipc_hv_sync_ctx_t *ctx = (ipc_hv_sync_ctx_t *)p_ipc_msg->ctx;
+        syncctx_t *ctx = (syncctx_t *)p_ipc_msg->ctx;
         hmutex_lock(&ctx->mutex);
         if (p_im_data->send_len > 0 && NULL != ctx->resp_data && NULL != ctx->resp_len)
         {
@@ -478,27 +406,11 @@ static int _ipc_hv_init(ipc_hv_register_info_t *reg_info)
 
     g_ipc_minfo[reg_info->module_id]->reg_info = *reg_info;
 
-    hmutex_init(&g_ipc_minfo[reg_info->module_id]->sync_ctx_pool.mutex);
-    INIT_LIST_HEAD(&g_ipc_minfo[reg_info->module_id]->sync_ctx_pool.head);
-    g_ipc_minfo[reg_info->module_id]->sync_ctx_pool.alloc_count = 0;
-
-    for (i = 0; i < IPC_HV_SYNC_CTX_INIT_COUNT; ++i)
+    g_ipc_minfo[reg_info->module_id]->syncctx_pool = syncctxpool_create(IPC_HV_SYNC_CTX_INIT_COUNT);
+    if (NULL == g_ipc_minfo[reg_info->module_id]->syncctx_pool)
     {
-        ipc_hv_sync_ctx_t *ctx = (ipc_hv_sync_ctx_t *)calloc(1, sizeof(ipc_hv_sync_ctx_t));
-        if (NULL != ctx)
-        {
-            hmutex_init(&ctx->mutex);
-            hcondvar_init(&ctx->cond);
-            ctx->result = -1;
-            INIT_LIST_HEAD(&ctx->list);
-            list_add(&ctx->list, &g_ipc_minfo[reg_info->module_id]->sync_ctx_pool.head);
-            g_ipc_minfo[reg_info->module_id]->sync_ctx_pool.alloc_count++;
-        }
-        else
-        {
-            LOG_PRINT_WARN("Pre-allocation of sync_ctx failed at index %zu", i);
-            break;
-        }
+        syncctxpool_destroy(g_ipc_minfo[reg_info->module_id]->syncctx_pool);
+        return -1;
     }
 
     hmutex_init(&g_ipc_minfo[reg_info->module_id]->s_mutex);
@@ -610,18 +522,7 @@ void ipc_hv_destroy(ipc_hv_id_e id)
     hmutex_unlock(&g_ipc_minfo[id]->s_mutex);
     hmutex_destroy(&g_ipc_minfo[id]->s_mutex);
 
-    ipc_hv_sync_ctx_pool_t *pool = &g_ipc_minfo[id]->sync_ctx_pool;
-    ipc_hv_sync_ctx_t *pos, *n;
-
-    list_for_each_entry_safe(pos, n, &pool->head, list)
-    {
-        list_del_init(&pos->list);
-        hmutex_destroy(&pos->mutex);
-        hcondvar_destroy(&pos->cond);
-        free(pos);
-    }
-
-    hmutex_destroy(&pool->mutex);
+    syncctxpool_destroy(g_ipc_minfo[id]->syncctx_pool);
 
     free(g_ipc_minfo[id]);
     g_ipc_minfo[id] = NULL;
@@ -754,12 +655,12 @@ int ipc_hv_send_sync(uint32_t src, uint32_t dest, uint32_t msg_id, const uint8_t
     }
 
     int ret = -1;
-    ipc_hv_sync_ctx_t *p_sync_ctx = NULL;
+    syncctx_t *p_sync_ctx = NULL;
 
-    p_sync_ctx = get_sync_ctx(src);
+    p_sync_ctx = syncctxpool_borrow(g_ipc_minfo[src]->syncctx_pool);
     if (NULL == p_sync_ctx)
     {
-        LOG_PRINT_WARN("sync_ctx pool full");
+        LOG_PRINT_WARN("syncctxpool_borrow fail!");
         return -1; // need wait and retry;
     }
 
@@ -788,7 +689,7 @@ int ipc_hv_send_sync(uint32_t src, uint32_t dest, uint32_t msg_id, const uint8_t
         }
         hmutex_unlock(&p_sync_ctx->mutex);
     } while (0);
-    put_sync_ctx(p_sync_ctx, src);
+    syncctxpool_return(g_ipc_minfo[src]->syncctx_pool, p_sync_ctx);
 
     return ret;
 }
