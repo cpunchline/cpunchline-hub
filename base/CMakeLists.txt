@@ -12,6 +12,7 @@ add_library(${BASE_LIB}-object OBJECT
     src/utility/threadqueue.c
     src/utility/timercluster.c
     src/utility/objectpool.c
+    src/utility/syncctxpool.c
 
     # data structure
     src/dsa/avl.c
