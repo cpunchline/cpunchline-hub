@@ -14,8 +14,8 @@ typedef struct _syncctx_t syncctx_t;
 typedef struct _syncctx_t
 {
     struct list_head list;
-    uint8_t *resp_data;
-    size_t *resp_len;
+    uint8_t *data;
+    size_t *len;
     int result; // 0=ok, -1=error
     pthread_mutex_t mutex;
     pthread_cond_t cond;

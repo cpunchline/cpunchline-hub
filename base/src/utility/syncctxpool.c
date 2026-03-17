@@ -20,8 +20,8 @@ static syncctx_t *syncctx_create(void)
             util_msleep(10);
         }
         pthread_cond_init(&ctx->cond, NULL);
-        ctx->resp_data = NULL;
-        ctx->resp_len = NULL;
+        ctx->data = NULL;
+        ctx->len = NULL;
         ctx->result = -1;
         INIT_LIST_HEAD(&ctx->list);
         pthread_mutexattr_destroy(&mutexattr);
@@ -155,8 +155,8 @@ void syncctxpool_return(syncctxpool_t *pool, syncctx_t *ctx)
         return;
     }
 
-    ctx->resp_data = NULL;
-    ctx->resp_len = NULL;
+    ctx->data = NULL;
+    ctx->len = NULL;
     ctx->result = -1;
     pthread_mutex_lock(&pool->mutex);
     list_add(&ctx->list, &pool->head);

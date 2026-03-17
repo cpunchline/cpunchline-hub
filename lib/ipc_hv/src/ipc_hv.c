@@ -217,11 +217,11 @@ static void on_recv_async(hio_t *io, void *buf, int readbytes)
     {
         syncctx_t *ctx = (syncctx_t *)p_ipc_msg->ctx;
         hmutex_lock(&ctx->mutex);
-        if (p_im_data->send_len > 0 && NULL != ctx->resp_data && NULL != ctx->resp_len)
+        if (p_im_data->send_len > 0 && NULL != ctx->data && NULL != ctx->len)
         {
-            size_t copy_len = (p_im_data->send_len < *ctx->resp_len) ? p_im_data->send_len : *ctx->resp_len;
-            memcpy(ctx->resp_data, p_im_data->msg_data, copy_len);
-            *ctx->resp_len = copy_len;
+            size_t copy_len = (p_im_data->send_len < *ctx->len) ? p_im_data->send_len : *ctx->len;
+            memcpy(ctx->data, p_im_data->msg_data, copy_len);
+            *ctx->len = copy_len;
         }
         ctx->result = 0;
         hcondvar_signal(&ctx->cond);
@@ -664,8 +664,8 @@ int ipc_hv_send_sync(uint32_t src, uint32_t dest, uint32_t msg_id, const uint8_t
         return -1; // need wait and retry;
     }
 
-    p_sync_ctx->resp_data = resp_data;
-    p_sync_ctx->resp_len = resp_len;
+    p_sync_ctx->data = resp_data;
+    p_sync_ctx->len = resp_len;
     p_sync_ctx->result = -1;
 
     do
