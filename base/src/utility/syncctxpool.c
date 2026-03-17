@@ -56,7 +56,8 @@ syncctxpool_t *syncctxpool_create(size_t init_count)
     }
 
     INIT_LIST_HEAD(&pool->head);
-    pool->alloc_count = 0;
+    pool->capacity = 0;
+    pool->size = 0;
 
     pthread_mutexattr_t mutexattr = {};
     pthread_mutexattr_init(&mutexattr);
@@ -68,7 +69,8 @@ syncctxpool_t *syncctxpool_create(size_t init_count)
         if (NULL != ctx)
         {
             list_add(&ctx->list, &pool->head);
-            pool->alloc_count++;
+            pool->capacity++;
+            pool->size++;
         }
         else
         {
@@ -119,10 +121,11 @@ syncctx_t *syncctxpool_borrow(syncctxpool_t *pool)
 
     syncctx_t *idle_ctx = NULL;
     pthread_mutex_lock(&pool->mutex);
-    if (!list_empty(&pool->head))
+    if (pool->size > 0) // if (!list_empty(&pool->head))
     {
         idle_ctx = list_first_entry(&pool->head, syncctx_t, list);
         list_del_init(&idle_ctx->list);
+        pool->size--;
     }
     else
     {
@@ -130,7 +133,8 @@ syncctx_t *syncctxpool_borrow(syncctxpool_t *pool)
         if (NULL != idle_ctx)
         {
             // no need add to list, just return it
-            pool->alloc_count++;
+            pool->capacity++;
+            pool->size++;
         }
         else
         {
@@ -139,7 +143,7 @@ syncctx_t *syncctxpool_borrow(syncctxpool_t *pool)
     }
     pthread_mutex_unlock(&pool->mutex);
 
-    LOG_PRINT_DEBUG("borrow from SyncCtx Pool. Total alloc: %zu", pool->alloc_count);
+    LOG_PRINT_DEBUG("borrow from SyncCtx Pool, capacity[%zu], free count[%zu]", pool->capacity, pool->size);
 
     return idle_ctx;
 }
@@ -156,6 +160,8 @@ void syncctxpool_return(syncctxpool_t *pool, syncctx_t *ctx)
     ctx->result = -1;
     pthread_mutex_lock(&pool->mutex);
     list_add(&ctx->list, &pool->head);
+    pool->size++;
     pthread_mutex_unlock(&pool->mutex);
-    LOG_PRINT_DEBUG("SyncCtx returned to pool. Total alloc: %zu", pool->alloc_count);
+
+    LOG_PRINT_DEBUG("SyncCtx returned to pool, capacity[%zu], free count[%zu]", pool->capacity, pool->size);
 }

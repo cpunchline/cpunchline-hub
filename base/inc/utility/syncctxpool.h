@@ -25,7 +25,8 @@ typedef struct _syncctxpool_t
 {
     struct list_head head;
     pthread_mutex_t mutex;
-    size_t alloc_count;
+    size_t capacity;
+    size_t size; // free count
 } syncctxpool_t;
 
 syncctxpool_t *syncctxpool_create(size_t init_count);
