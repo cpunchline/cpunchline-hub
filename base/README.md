@@ -29,6 +29,7 @@ C/C++ 基础数据结构,算法和组件库的实现.
 - `threadqueue` - 线程间生产者-消费者队列
 - `timercluster` - 定时器集群
 - `objectpool` - 内存/对象池
+- `syncctxpool` - 同步实体池
 
 ## 📚 核心概念说明
 
