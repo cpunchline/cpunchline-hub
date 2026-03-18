@@ -29,8 +29,8 @@ set(CPUNCHLINE_BUILD_DIR ${CPUNCHLINE_ROOT_DIR}/build)
 list(APPEND CMAKE_MODULE_PATH "${CPUNCHLINE_CMAKE_DIR}")
 # 设置<包名>_DIR变量指向<包名>Config.cmake所在目录
 
-if(NOT UNIX)
-    message(FATAL_ERROR "Only UNIX is supported!")
+if(NOT LINUX)
+    message(FATAL_ERROR "Only LINUX is supported!")
 endif()
 
 find_package(Threads REQUIRED)
