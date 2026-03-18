@@ -214,8 +214,6 @@ timercluster_t *timercluster_init(void)
     {
         util_msleep(10);
     }
-    pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC);
-    pthread_cond_init(&cluster->cond, &condattr);
     pthread_condattr_destroy(&condattr);
     cluster->running = true;
     pthread_create(&cluster->thread, NULL, timercluster_thread_func, cluster);
