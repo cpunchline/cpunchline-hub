@@ -12,9 +12,10 @@ void LocalRegistry::onConnection(const hv::SocketChannelPtr &channel)
         if (strstr(channel->peeraddr().c_str(), LOCAL_REGISTRY_CTRL_SOCKET_FILE))
         {
             LOG_PRINT_INFO("ctrl connected");
-            if (registry->m_ctrl_channel_id == channel->id())
+            if (registry->m_ctrl_channel_id != 0)
             {
                 LOG_PRINT_ERROR("another same ctrl is running, not run again");
+                channel->close();
                 return;
             }
             registry->m_ctrl_channel_id = channel->id();
