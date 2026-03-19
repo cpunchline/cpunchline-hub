@@ -16,11 +16,18 @@ target_include_directories(${TCP_STUDY_PROGRAM_B} PRIVATE .)
 
 install(TARGETS ${TCP_STUDY_PROGRAM_B} DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-add_executable(${TCP_TEMPEST_PROGRAM}
-    ${TCP_TEMPEST_PROGRAM}.cpp
-)
-target_include_directories(${TCP_TEMPEST_PROGRAM} PRIVATE .)
-target_link_libraries(${TCP_TEMPEST_PROGRAM} PRIVATE readline)
-target_compile_options(${TCP_TEMPEST_PROGRAM} PRIVATE -w)
+find_library(READLINE_LIBRARY NAMES readline)
+# /usr/lib/x86_64-linux-gnu/libreadline.so
+# /usr/include/readline/*.h
 
-install(TARGETS ${TCP_TEMPEST_PROGRAM} DESTINATION ${CMAKE_INSTALL_BINDIR})
+message(FATAL_ERROR "${READLINE_LIBRARY}")
+if(READLINE_LIBRARY)
+    add_executable(${TCP_TEMPEST_PROGRAM}
+        ${TCP_TEMPEST_PROGRAM}.cpp
+    )
+    target_include_directories(${TCP_TEMPEST_PROGRAM} PRIVATE .)
+    target_link_libraries(${TCP_TEMPEST_PROGRAM} PRIVATE readline)
+    target_compile_options(${TCP_TEMPEST_PROGRAM} PRIVATE -w)
+
+    install(TARGETS ${TCP_TEMPEST_PROGRAM} DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
