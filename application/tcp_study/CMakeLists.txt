@@ -20,7 +20,6 @@ find_library(READLINE_LIBRARY NAMES readline)
 # /usr/lib/x86_64-linux-gnu/libreadline.so
 # /usr/include/readline/*.h
 
-message(FATAL_ERROR "${READLINE_LIBRARY}")
 if(READLINE_LIBRARY)
     add_executable(${TCP_TEMPEST_PROGRAM}
         ${TCP_TEMPEST_PROGRAM}.cpp
