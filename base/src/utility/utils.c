@@ -529,6 +529,11 @@ int32_t util_file_read(const char *abs_filename, uint8_t *data, size_t *len)
     size_t remain = 0;
     uint8_t *p = NULL;
 
+    // 128 KiB is from:
+    // http://git.savannah.gnu.org/cgit/coreutils.git/tree/src/ioblksize.h
+    // > As of May 2014, 128KiB is determined to be the minimium
+    // > blksize to best minimize system call overhead.
+
     if (NULL == data || NULL == len || 0 == *len)
     {
         LOG_PRINT_ERROR("invalid param");
