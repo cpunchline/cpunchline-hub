@@ -93,6 +93,11 @@ git submodule add https://bgithub.xyz/affaan-m/everything-claude-code thirdparty
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/rules .github/rules`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/skills .github/skills`
 
+`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/agents .roo/agents`
+`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/commands .roo/commands`
+`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/rules .roo/rules`
+`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/skills .roo/skills`
+
 ### 三方应用
 
 1. pigz 并行化压缩工具
