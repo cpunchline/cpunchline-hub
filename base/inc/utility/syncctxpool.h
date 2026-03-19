@@ -8,9 +8,6 @@ extern "C"
 #include <pthread.h>
 #include "dsa/list.h"
 
-typedef struct _syncctxpool_t syncctxpool_t;
-typedef struct _syncctx_t syncctx_t;
-
 typedef struct _syncctx_t
 {
     struct list_head list;
