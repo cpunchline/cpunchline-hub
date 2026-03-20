@@ -12,7 +12,6 @@ void LocalRegistry::onConnection(const hv::SocketChannelPtr &channel)
         if (strstr(channel->peeraddr().c_str(), LOCAL_REGISTRY_CTRL_SOCKET_FILE))
         {
             LOG_PRINT_INFO("ctrl connected");
-            registry->m_ctrl_channel_id = channel->id();
         }
         else
         {
@@ -25,7 +24,6 @@ void LocalRegistry::onConnection(const hv::SocketChannelPtr &channel)
         if (strstr(channel->peeraddr().c_str(), LOCAL_REGISTRY_CTRL_SOCKET_FILE))
         {
             LOG_PRINT_INFO("ctrl disconnected");
-            registry->m_ctrl_channel_id = 0;
         }
         else
         {
