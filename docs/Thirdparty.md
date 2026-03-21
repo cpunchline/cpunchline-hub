@@ -87,16 +87,12 @@ git submodule add https://bgithub.xyz/affaan-m/everything-claude-code thirdparty
 
 ### skills
 
-`mkdir -p .roo && ln -s ../.github/skills .roo/skills`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/agents .github/agents`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/commands .github/commands`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/rules .github/rules`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/skills .github/skills`
-
-`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/agents .roo/agents`
-`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/commands .roo/commands`
-`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/rules .roo/rules`
-`ln -s ../thirdparty/everything-claude-code/docs/zh-CN/skills .roo/skills`
+`ln -s .github .roo`
+`ln -s .github .qoder`
 
 ### 三方应用
 
