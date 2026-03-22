@@ -181,7 +181,7 @@ void LocalRegistry::onWriteComplete(const hv::SocketChannelPtr &channel, hv::Buf
     LOG_PRINT_DEBUG("onWriteComplete len[%zu] to channel_id[%u], fd[%d]", inbuf->size(), channel->id(), channel->fd());
 }
 
-std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t service_id, uint32_t msg_seqid, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size)
+std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t service_id, uint32_t msg_seqid, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size)
 {
     std::int32_t ret = 0;
 
@@ -192,33 +192,51 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
     }
 
     LOG_PRINT_DEBUG("send service_id[%d] to channel_id[%u], fd[%d]", service_id, client_channel->id(), client_channel->fd());
-    uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
 
-    pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
-    bool status = pb_encode(&stream, fileds, msgdata);
-    if (!status)
+    size_t encoded_size = 0;
+    if (nullptr != msgdata && field_size > 0)
     {
-        LOG_PRINT_ERROR("pb_encode service_id[%d] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
-        ret = -1;
+        if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
+        {
+            LOG_PRINT_ERROR("pb_get_encoded_size msg_id[%d] fail!", service_id);
+            return -1;
+        }
     }
     else
     {
-        st_local_msg_header send_msg_header = {};
-        send_msg_header.client_id = MODULE_ID_AUTOLIB_LOCAL_REGISTRY;
-        send_msg_header.msg_seqid = msg_seqid;
-        send_msg_header.msg_type = msg_type;
-        send_msg_header.service_id = service_id;
-        send_msg_header.msg_len = (uint32_t)stream.bytes_written;
-        memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
-        ret = client_channel->write(buffer, (int)(LOCAL_REGISTRY_MSG_HEADER_SIZE + stream.bytes_written));
-        if (ret < 0)
+        encoded_size = 0;
+    }
+
+    uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+
+    if (nullptr != msgdata && encoded_size > 0)
+    {
+        pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
+        bool status = pb_encode(&stream, fields, msgdata);
+        if (!status)
         {
-            LOG_PRINT_ERROR("channel_id[%u] write fail, ret[%d]", client_channel->id(), ret);
+            LOG_PRINT_ERROR("pb_encode service_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
+            return -1;
         }
-        else
-        {
-            ret = 0;
-        }
+        LOG_PRINT_DEBUG("pb_encode service_id[%u] success", service_id);
+    }
+
+    st_local_msg_header send_msg_header = {};
+    send_msg_header.client_id = MODULE_ID_AUTOLIB_LOCAL_REGISTRY;
+    send_msg_header.msg_seqid = msg_seqid;
+    send_msg_header.msg_type = msg_type;
+    send_msg_header.service_id = service_id;
+    send_msg_header.msg_len = (uint32_t)encoded_size;
+    memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
+
+    ret = client_channel->write(buffer, (int)(LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size));
+    if (ret < 0)
+    {
+        LOG_PRINT_ERROR("channel_id[%u] write fail, ret[%d]", client_channel->id(), ret);
+    }
+    else
+    {
+        ret = 0;
     }
 
     return ret;

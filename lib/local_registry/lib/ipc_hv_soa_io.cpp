@@ -82,219 +82,212 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
     LOG_PRINT_DEBUG("on_recv_daemon fd[%d], readbytes[%d]", hio_fd(io), readbytes);
     if (readbytes < (int)LOCAL_REGISTRY_MSG_HEADER_SIZE)
     {
-        LOG_PRINT_ERROR("not a complete msg");
+        LOG_PRINT_ERROR("not a complete msg, readbytes[%d] < header_size[%zu]",
+                        readbytes, LOCAL_REGISTRY_MSG_HEADER_SIZE);
         return;
     }
 
-    bool status = false;
     uint32_t real_readbytes = (uint32_t)((uint32_t)readbytes - LOCAL_REGISTRY_MSG_HEADER_SIZE);
     st_local_msg_header *recv_msg_header = (st_local_msg_header *)buf;
+    LOG_PRINT_DEBUG("on_recv_daemon service_id[%u], msg_type[%u], msg_seqid[%u], msg_len[%u]",
+                    recv_msg_header->service_id,
+                    recv_msg_header->msg_type,
+                    recv_msg_header->msg_seqid,
+                    recv_msg_header->msg_len);
     if (real_readbytes != recv_msg_header->msg_len)
     {
         LOG_PRINT_ERROR("msg_len[%u] != real_readbytes[%u]", recv_msg_header->msg_len, real_readbytes);
         return;
     }
 
-    LOG_PRINT_DEBUG("on_recv_daemon service_id[%u], msg_len[%u]", recv_msg_header->service_id, recv_msg_header->msg_len);
-
-    char resp[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
-    uint32_t resp_size = 0;
     int32_t ret = 0;
-    uint8_t *buffer = (uint8_t *)buf + LOCAL_REGISTRY_MSG_HEADER_SIZE;
-    pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
-
+    uint8_t pstruct[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+    const pb_msgdesc_t *fields = nullptr;
+    uint32_t fields_size = 0;
     uint16_t module_id = (uint16_t)(recv_msg_header->service_id >> 16);
-    if (module_id != MODULE_ID_AUTOLIB_LOCAL_REGISTRY)
+    uint16_t msg_id = (uint16_t)(recv_msg_header->service_id & 0xFFFF);
+    const st_autolib_servicemap *pmap = gst_autolib_servicemap[module_id];
+    if (nullptr == pmap)
     {
-        LOG_PRINT_ERROR("module_id[%u] != [%u]", module_id, MODULE_ID_AUTOLIB_LOCAL_REGISTRY);
+        LOG_PRINT_ERROR("module_id[%u] not found", module_id);
         return;
     }
+    const st_autolib_servicemap_item *pitem = &pmap->items[msg_id - 1];
+    if (nullptr == pitem)
+    {
+        LOG_PRINT_ERROR("service_id[%u] not found", recv_msg_header->service_id);
+        return;
+    }
+
+    if (recv_msg_header->msg_type == LOCAL_MSG_TYPE_METHOD_RESPONSE_SYNC || recv_msg_header->msg_type == LOCAL_MSG_TYPE_METHOD_RESPONSE_ASYNC)
+    {
+        fields = pitem->out_fields;
+        fields_size = pitem->out_size;
+    }
+    else
+    {
+        fields = pitem->in_fields;
+        fields_size = pitem->in_size;
+    }
+
+    if (recv_msg_header->msg_len > 0)
+    {
+        if (fields_size == 0)
+        {
+            LOG_PRINT_ERROR("msg_len[%u] > 0, but fields_size[%u] = 0", recv_msg_header->msg_len, fields_size);
+            return;
+        }
+
+        uint8_t *buffer = (uint8_t *)buf + LOCAL_REGISTRY_MSG_HEADER_SIZE;
+        pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
+        bool status = pb_decode(&stream, fields, pstruct);
+        if (!status)
+        {
+            LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
+            return;
+        }
+        LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+    }
+    else
+    {
+        LOG_PRINT_DEBUG("pb_decode service_id[%d] success(no need)");
+    }
+
     switch (recv_msg_header->service_id)
     {
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT:
             {
-                resp_size = sizeof(st_register_client_resp);
-                *(st_register_client_resp *)resp = st_register_client_resp_init_zero;
-                status = pb_decode(&stream, st_register_client_resp_fields, resp);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
-                    ret = -1;
-                }
-                else
-                {
-                    st_register_client_resp *p_resp = (st_register_client_resp *)resp;
-                    LOG_PRINT_DEBUG("register client id client_id[%u], client_pid[%u]!", p_resp->client_id, p_resp->client_pid);
-                    ret = 0;
-                }
+                st_register_client_resp *p_resp = (st_register_client_resp *)pstruct;
+                LOG_PRINT_DEBUG("register client id client_id[%u], client_pid[%u]!", p_resp->client_id, p_resp->client_pid);
+                ret = 0;
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_CLIENT:
             {
-                resp_size = sizeof(st_get_client_resp);
-                *(st_get_client_resp *)resp = st_get_client_resp_init_zero;
-                status = pb_decode(&stream, st_get_client_resp_fields, resp);
-                if (!status)
+                st_get_client_resp *p_resp = (st_get_client_resp *)pstruct;
+                if (p_resp->has_responser_client)
                 {
-                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
-                    ret = -1;
+                    LOG_PRINT_DEBUG("get_client resp client_id[%u], client_name[%s]!", p_resp->responser_client.client_id, p_resp->responser_client.client_name);
                 }
-                else
-                {
-                    st_get_client_resp *p_resp = (st_get_client_resp *)resp;
-                    if (p_resp->has_responser_client)
-                    {
-                        LOG_PRINT_DEBUG("get_client resp client_id[%u], client_name[%s]!", p_resp->responser_client.client_id, p_resp->responser_client.client_name);
-                    }
-                    ret = 0;
-                }
+                ret = 0;
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_SERVICE:
             {
-                resp_size = sizeof(st_get_service_resp);
-                *(st_get_service_resp *)resp = st_get_service_resp_init_zero;
-                status = pb_decode(&stream, st_get_service_resp_fields, resp);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
-                    ret = -1;
-                }
-                else
-                {
-                    ret = 0;
-                }
+                st_get_service_resp *p_resp = (st_get_service_resp *)pstruct;
+                (void)p_resp;
+                ret = 0;
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_EVENT_SERVICE_CHANGE_STATUS:
             {
-                resp_size = sizeof(st_service_change_status);
-                *(st_service_change_status *)resp = st_service_change_status_init_zero;
-                status = pb_decode(&stream, st_service_change_status_fields, resp);
-                if (!status)
+                st_service_change_status *change_status = (st_service_change_status *)pstruct;
+                if (change_status->has_service)
                 {
-                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
-                }
-                else
-                {
-                    st_service_change_status *change_status = (st_service_change_status *)resp;
-                    if (change_status->has_service)
+                    LOG_PRINT_DEBUG("service change status service_id[%u]-service_status[%d]",
+                                    change_status->service.service_id, change_status->service.service_status);
+                    auto it = find_service(change_status->service.service_id);
+                    if (nullptr == it)
                     {
-                        LOG_PRINT_DEBUG("service change status service_id[%u]-service_status[%d]",
-                                        change_status->service.service_id, change_status->service.service_status);
-                        auto it = find_service(change_status->service.service_id);
-                        if (nullptr == it)
-                        {
-                            LOG_PRINT_ERROR("service_id[%u] not found", change_status->service.service_id);
-                        }
-                        else
-                        {
-                            std::shared_ptr<ipc_hv_soa_process_client> client = nullptr;
-                            it->service_status = change_status->service.service_status;
-                            if (change_status->has_provider_client)
-                            {
-                                LOG_PRINT_DEBUG("service change status provider client_id[%u]-client_name[%s]-client_status[%d]",
-                                                change_status->provider_client.client_id,
-                                                change_status->provider_client.client_name,
-                                                change_status->provider_client.client_status);
-                                auto it1 = find_process_client(change_status->provider_client.client_id);
-                                if (nullptr == it1)
-                                {
-                                    client = save_process_client(change_status->provider_client.client_id, change_status->provider_client.client_name);
-                                }
-                                else
-                                {
-                                    client = it1;
-                                }
-                                it->service_provider = client;
-                            }
-
-                            if (E_IPC_HV_SOA_SERVICE_TYPE_METHOD == it->service_type && nullptr != it->service_handler)
-                            {
-                                PF_IPC_HV_SOA_SERVICE_STATUS_CB cb = (PF_IPC_HV_SOA_SERVICE_STATUS_CB)it->service_handler;
-                                cb(it->service_id, change_status->service.service_status);
-                            }
-                        }
+                        LOG_PRINT_ERROR("service_id[%u] not found", change_status->service.service_id);
                     }
                     else
                     {
-                        LOG_PRINT_ERROR("service change status no service");
+                        std::shared_ptr<ipc_hv_soa_process_client> client = nullptr;
+                        it->service_status = change_status->service.service_status;
+                        if (change_status->has_provider_client)
+                        {
+                            LOG_PRINT_DEBUG("service change status provider client_id[%u]-client_name[%s]-client_status[%d]",
+                                            change_status->provider_client.client_id,
+                                            change_status->provider_client.client_name,
+                                            change_status->provider_client.client_status);
+                            auto it1 = find_process_client(change_status->provider_client.client_id);
+                            if (nullptr == it1)
+                            {
+                                client = save_process_client(change_status->provider_client.client_id, change_status->provider_client.client_name);
+                            }
+                            else
+                            {
+                                client = it1;
+                            }
+                            it->service_provider = client;
+                        }
+
+                        if (E_IPC_HV_SOA_SERVICE_TYPE_METHOD == it->service_type && nullptr != it->service_handler)
+                        {
+                            PF_IPC_HV_SOA_SERVICE_STATUS_CB cb = (PF_IPC_HV_SOA_SERVICE_STATUS_CB)it->service_handler;
+                            cb(it->service_id, change_status->service.service_status);
+                        }
                     }
+                }
+                else
+                {
+                    LOG_PRINT_ERROR("service change status no service");
                 }
             }
             return;
             // break;
         case LOCAL_REGISTRY_SERVICE_ID_EVENT_LISTENER_CHANGE_TO_PROVIDER:
             {
-                resp_size = sizeof(st_listener_change_to_provider);
-                *(st_listener_change_to_provider *)resp = st_listener_change_to_provider_init_zero;
-                status = pb_decode(&stream, st_listener_change_to_provider_fields, resp);
-                if (!status)
+                std::shared_ptr<ipc_hv_soa_process_client> client = nullptr;
+                st_listener_change_to_provider *event_listen = (st_listener_change_to_provider *)pstruct;
+
+                LOG_PRINT_DEBUG("service_id[%u]-listener_clients_count[%u]-reg[%s]",
+                                event_listen->service_id, event_listen->listener_clients_count, event_listen->reg ? "true" : "false");
+                for (size_t i = 0; i < event_listen->listener_clients_count; i++)
                 {
-                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
+                    LOG_PRINT_DEBUG("listener_client client_id[%u]", event_listen->listener_clients[i].client_id);
+                }
+
+                auto it = find_service(event_listen->service_id);
+                if (nullptr == it)
+                {
+                    LOG_PRINT_ERROR("service_id[%u] not found", event_listen->service_id);
                 }
                 else
                 {
-                    std::shared_ptr<ipc_hv_soa_process_client> client = nullptr;
-                    st_listener_change_to_provider *event_listen = (st_listener_change_to_provider *)resp;
-
-                    LOG_PRINT_DEBUG("service_id[%u]-listener_clients_count[%u]-reg[%s]",
-                                    event_listen->service_id, event_listen->listener_clients_count, event_listen->reg ? "true" : "false");
-                    for (size_t i = 0; i < event_listen->listener_clients_count; i++)
+                    uint32_t i = 0;
+                    for (i = 0; i < event_listen->listener_clients_count; i++)
                     {
-                        LOG_PRINT_DEBUG("listener_client client_id[%u]", event_listen->listener_clients[i].client_id);
-                    }
-
-                    auto it = find_service(event_listen->service_id);
-                    if (nullptr == it)
-                    {
-                        LOG_PRINT_ERROR("service_id[%u] not found", event_listen->service_id);
-                    }
-                    else
-                    {
-                        uint32_t i = 0;
-                        for (i = 0; i < event_listen->listener_clients_count; i++)
+                        st_local_client_item *p_client = &(event_listen->listener_clients[i]);
+                        auto it1 = find_process_client(p_client->client_id);
+                        if (nullptr == it1)
                         {
-                            st_local_client_item *p_client = &(event_listen->listener_clients[i]);
-                            auto it1 = find_process_client(p_client->client_id);
-                            if (nullptr == it1)
+                            client = save_process_client(p_client->client_id, p_client->client_name);
+                        }
+                        else
+                        {
+                            client = it1;
+                        }
+
+                        if (event_listen->reg)
+                        {
+                            auto it2 = it->service_listeners.find(client->client_id);
+                            if (it->service_listeners.end() == it2)
                             {
-                                client = save_process_client(p_client->client_id, p_client->client_name);
-                            }
-                            else
-                            {
-                                client = it1;
+                                it->service_listeners.insert({client->client_id, client});
                             }
 
-                            if (event_listen->reg)
+                            if (it->service_status == E_IPC_HV_SOA_SERVICE_TYPE_EVENT && nullptr != it->service_handler)
                             {
-                                auto it2 = it->service_listeners.find(client->client_id);
-                                if (it->service_listeners.end() == it2)
+                                void *event_data = nullptr;
+                                uint32_t event_data_len = 0;
+                                // new listener, it should send the first once trigger to listener
+                                PF_IPC_HV_SOA_EVENT_LISTEN_CB listener_cb = (PF_IPC_HV_SOA_EVENT_LISTEN_CB)it->service_handler;
+                                if (IPC_HV_SOA_RET_SUCCESS == listener_cb(it->service_id, &event_data, &event_data_len))
                                 {
-                                    it->service_listeners.insert({client->client_id, client});
-                                }
-
-                                if (it->service_status == E_IPC_HV_SOA_SERVICE_TYPE_EVENT && nullptr != it->service_handler)
-                                {
-                                    void *event_data = nullptr;
-                                    uint32_t event_data_len = 0;
-                                    // new listener, it should send the first once trigger to listener
-                                    PF_IPC_HV_SOA_EVENT_LISTEN_CB listener_cb = (PF_IPC_HV_SOA_EVENT_LISTEN_CB)it->service_handler;
-                                    if (IPC_HV_SOA_RET_SUCCESS == listener_cb(it->service_id, &event_data, &event_data_len))
+                                    ret = ipc_hv_soa_inn_trigger_to_client(it, event_data, event_data_len, client);
+                                    if (IPC_HV_SOA_RET_SUCCESS != ret)
                                     {
-                                        ret = ipc_hv_soa_inn_trigger_to_client(it, event_data, event_data_len, client);
-                                        if (IPC_HV_SOA_RET_SUCCESS != ret)
-                                        {
-                                            LOG_PRINT_ERROR("ipc_hv_soa_inn_trigger_to_client fail, ret[%d]!", ret);
-                                        }
+                                        LOG_PRINT_ERROR("ipc_hv_soa_inn_trigger_to_client fail, ret[%d]!", ret);
                                     }
                                 }
                             }
-                            else
-                            {
-                                it->service_listeners.erase(client->client_id);
-                                break;
-                            }
+                        }
+                        else
+                        {
+                            it->service_listeners.erase(client->client_id);
+                            break;
                         }
                     }
                 }
@@ -307,7 +300,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
 
     std::lock_guard<std::mutex> daemon_lock{g_client->daemo_mutex};
     g_client->daemon_cond_msgid = recv_msg_header->service_id;
-    memcpy(g_client->daemon_cond_msgdata, resp, resp_size);
+    memcpy(g_client->daemon_cond_msgdata, pstruct, fields_size);
     g_client->daemon_cond_ret = ret;
     g_client->daemon_cond.notify_one();
 }
@@ -380,6 +373,10 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
             return;
         }
         LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+    }
+    else
+    {
+        LOG_PRINT_DEBUG("pb_decode service_id[%d] success(no need)");
     }
 
     if (recv_msg_header->msg_type != E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC)

@@ -40,7 +40,7 @@ private:
     static void onConnection(const hv::SocketChannelPtr &channel);
     static void onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *inbuf);
     static void onWriteComplete(const hv::SocketChannelPtr &channel, hv::Buffer *inbuf);
-    std::int32_t send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t service_id, uint32_t msg_seqid, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size);
+    std::int32_t send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t service_id, uint32_t msg_seqid, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size);
 
     std::int32_t add_client(const hv::SocketChannelPtr &client_channel);
     std::int32_t remove_client(const hv::SocketChannelPtr &client_channel);

@@ -361,27 +361,29 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
             encoded_size = 0;
         }
 
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
-        memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
-        memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
-        memcpy(buffer.data() + 3 * sizeof(uint32_t), &service_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 4 * sizeof(uint32_t), &encoded_size, sizeof(uint32_t));
-
+        uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
         if (nullptr != msgdata && encoded_size > 0)
         {
-            pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, encoded_size);
+            pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, encoded_size);
             bool status = pb_encode(&stream, fields, msgdata);
             if (!status)
             {
-                LOG_PRINT_ERROR("pb_encode msg_id[%d] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
+                LOG_PRINT_ERROR("pb_encode msg_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
                 return IPC_HV_SOA_RET_FAIL;
             }
-            LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
+            LOG_PRINT_DEBUG("pb_encode service_id[%u] success", service_id);
         }
 
+        st_local_msg_header send_msg_header = {};
+        send_msg_header.client_id = client_id;
+        send_msg_header.msg_seqid = msg_seqid;
+        send_msg_header.msg_type = msg_type;
+        send_msg_header.service_id = service_id;
+        send_msg_header.msg_len = (uint32_t)encoded_size;
+        memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
+
         std::lock_guard<std::mutex> send_msg_lock(dest->send_msg_mutex);
-        ret = hio_write(dest->client_send_io, buffer.data(), buffer.size());
+        ret = hio_write(dest->client_send_io, buffer, LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
         if (ret < 0)
         {
             LOG_PRINT_ERROR("hio_write fail, ret[%d], error[%d]", ret, hio_error(dest->client_send_io));
@@ -472,28 +474,30 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
             encoded_size = 0;
         }
 
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
-        memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
-        memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
-        memcpy(buffer.data() + 3 * sizeof(uint32_t), &service_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 4 * sizeof(uint32_t), &encoded_size, sizeof(uint32_t));
-
+        uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
         if (nullptr != msgdata && encoded_size > 0)
         {
-            pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, encoded_size);
+            pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, encoded_size);
             bool status = pb_encode(&stream, fields, msgdata);
             if (!status)
             {
-                LOG_PRINT_ERROR("pb_encode msg_id[%d] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
+                LOG_PRINT_ERROR("pb_encode msg_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
                 return IPC_HV_SOA_RET_FAIL;
             }
-            LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
+            LOG_PRINT_DEBUG("pb_encode service_id[%u] success", service_id);
         }
+
+        st_local_msg_header send_msg_header = {};
+        send_msg_header.client_id = client_id;
+        send_msg_header.msg_seqid = msg_seqid;
+        send_msg_header.msg_type = msg_type;
+        send_msg_header.service_id = service_id;
+        send_msg_header.msg_len = (uint32_t)encoded_size;
+        memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
 
         std::unique_lock<std::mutex> send_msg_lock(dest->send_msg_mutex);
         dest->send_msg_map.insert({key, expected_resp_data});
-        ret = hio_write(dest->client_send_io, buffer.data(), buffer.size());
+        ret = hio_write(dest->client_send_io, buffer, LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
         if (ret < 0)
         {
             LOG_PRINT_ERROR("hio_write fail, ret[%d], error[%d]", ret, hio_error(dest->client_send_io));
