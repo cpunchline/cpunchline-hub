@@ -92,7 +92,7 @@ int32_t send_msg_to_daemon_sync(uint32_t msg_id, const void *msgdata, const pb_m
         LOG_PRINT_ERROR("_send_msg_to_daemon_internal fail, ret[%d]", ret);
         // Clean condition state on error
         g_client->daemon_cond_msgid = 0;
-        g_client->daemon_cond_ret = IPC_HV_SOA_RET_FAIL;
+        g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
         return ret;
     }
 
@@ -148,7 +148,7 @@ int32_t send_msg_to_daemon_sync(uint32_t msg_id, const void *msgdata, const pb_m
 
     // Clean condition state
     g_client->daemon_cond_msgid = 0;
-    g_client->daemon_cond_ret = IPC_HV_SOA_RET_FAIL;
+    g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
 
     return ret;
 }
@@ -201,7 +201,7 @@ int32_t connect_with_daemon()
     }
     else
     {
-        if (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_ERROR)
+        if (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_CONNECTED)
         {
             LOG_PRINT_ERROR("connect with daemon fail, invalid daemon_cond_ret[%d]!", g_client->daemon_cond_ret);
             ret = IPC_HV_SOA_RET_FAIL;
@@ -276,7 +276,7 @@ int32_t connect_with_process_client(std::shared_ptr<ipc_hv_soa_process_client> c
     }
     else
     {
-        if (client->send_msg_cond_ret != IPC_HV_SOA_COND_STATE_ERROR)
+        if (client->send_msg_cond_ret != IPC_HV_SOA_COND_STATE_CONNECTED)
         {
             LOG_PRINT_ERROR("connect with daemon fail, invalid send_msg_cond_ret[%d]!", client->send_msg_cond_ret);
             ret = IPC_HV_SOA_RET_FAIL;

@@ -4,7 +4,7 @@ std::atomic_bool g_init_flag = false;
 std::shared_ptr<ipc_hv_soa_client> g_client = nullptr;
 
 // Helper function to setup unpack settings
-static void setup_unpack_setting()
+static void setup_unpack_setting(void)
 {
     g_client->daemon_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
     g_client->daemon_unpack_setting.package_max_length = (unsigned int)LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;

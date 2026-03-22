@@ -59,10 +59,10 @@ const constexpr std::size_t LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE = sizeof(uint
 #define LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS (1500)
 
 // Internal state constants
-#define IPC_HV_SOA_COND_STATE_INIT     (-1)
-#define IPC_HV_SOA_COND_STATE_SUCCESS  (0)
-#define IPC_HV_SOA_COND_STATE_ERROR    (INT32_MIN)
-#define IPC_HV_SOA_COND_STATE_COMPLETE (INT32_MAX)
+#define IPC_HV_SOA_COND_STATE_INIT         (-1)
+#define IPC_HV_SOA_COND_STATE_SUCCESS      (0)
+#define IPC_HV_SOA_COND_STATE_CONNECTED    (INT32_MIN) // mean connected
+#define IPC_HV_SOA_COND_STATE_DISCONNECTED (INT32_MAX) // mean disconnected
 
 // Repeat constants for timer
 #define IPC_HV_SOA_TIMER_ID_INVALID     (0)

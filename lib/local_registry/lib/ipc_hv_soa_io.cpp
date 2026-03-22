@@ -22,7 +22,7 @@ void on_close(hio_t *io)
     {
         {
             std::unique_lock<std::mutex> daemo_lock(g_client->daemo_mutex);
-            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_COMPLETE;
+            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_DISCONNECTED;
             g_client->m_daemon_io = nullptr;
             g_client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
             g_client->daemon_cond.notify_all();
@@ -57,7 +57,7 @@ void on_close(hio_t *io)
                 std::unique_lock<std::mutex> send_msg_lock(client->send_msg_mutex);
                 client->send_msg_seqid = 0;
                 client->send_msg_map.clear();
-                client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_COMPLETE;
+                client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_CONNECTED;
                 client->client_send_io = nullptr;
                 client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
                 client->send_msg_cond.notify_all();
@@ -472,7 +472,7 @@ void on_connect(hio_t *io)
             std::unique_lock daemon_lock(g_client->daemo_mutex);
             g_client->daemon_cond_msgid = 0;
             memset(g_client->daemon_cond_msgdata, 0x00, sizeof(g_client->daemon_cond_msgdata));
-            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_ERROR;
+            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_CONNECTED;
             g_client->daemon_cond.notify_one();
         }
         else
@@ -491,7 +491,7 @@ void on_connect(hio_t *io)
                     std::unique_lock<std::mutex> send_msg_lock(client->send_msg_mutex);
                     client->send_msg_seqid = 0;
                     client->send_msg_map.clear();
-                    client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_ERROR;
+                    client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_CONNECTED;
                     client->send_msg_cond.notify_one();
                 }
             }
