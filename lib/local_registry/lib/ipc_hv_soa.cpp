@@ -4,15 +4,23 @@ std::atomic_bool g_init_flag = false;
 std::shared_ptr<ipc_hv_soa_client> g_client = nullptr;
 
 // Helper function to setup unpack settings
-static void _setup_unpack_setting(unpack_setting_t &setting, size_t header_size)
+static void setup_unpack_setting()
 {
-    setting.mode = UNPACK_BY_LENGTH_FIELD;
-    setting.package_max_length = (unsigned int)header_size + LOCAL_REGISTRY_MSG_SIZE_MAX;
-    setting.body_offset = (unsigned short)header_size;
-    setting.length_field_offset = sizeof(uint32_t);
-    setting.length_field_bytes = sizeof(uint32_t);
-    setting.length_adjustment = 0;
-    setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
+    g_client->daemon_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
+    g_client->daemon_unpack_setting.package_max_length = (unsigned int)LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
+    g_client->daemon_unpack_setting.body_offset = (unsigned short)LOCAL_REGISTRY_MSG_HEADER_SIZE;
+    g_client->daemon_unpack_setting.length_field_offset = sizeof(uint32_t);
+    g_client->daemon_unpack_setting.length_field_bytes = sizeof(uint32_t);
+    g_client->daemon_unpack_setting.length_adjustment = 0;
+    g_client->daemon_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
+
+    g_client->daemon_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
+    g_client->daemon_unpack_setting.package_max_length = (unsigned int)LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
+    g_client->daemon_unpack_setting.body_offset = (unsigned short)LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE;
+    g_client->daemon_unpack_setting.length_field_offset = sizeof(uint32_t) * 4;
+    g_client->daemon_unpack_setting.length_field_bytes = sizeof(uint32_t);
+    g_client->daemon_unpack_setting.length_adjustment = 0;
+    g_client->daemon_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
 }
 
 // Helper function to create and run event loop
@@ -95,9 +103,7 @@ int32_t ipc_hv_soa_init(uint32_t *client_id)
     g_client = std::make_shared<ipc_hv_soa_client>();
 
     // Setup unpack settings
-    _setup_unpack_setting(g_client->daemon_unpack_setting, LOCAL_REGISTRY_MSG_HEADER_SIZE);
-    _setup_unpack_setting(g_client->process_unpack_setting, LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE);
-    g_client->process_unpack_setting.length_field_offset = sizeof(uint32_t) * 4;
+    setup_unpack_setting();
 
     // Clear maps
     {
