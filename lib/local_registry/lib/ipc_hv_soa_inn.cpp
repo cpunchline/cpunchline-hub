@@ -1,4 +1,4 @@
-  #include "ipc_hv_soa_inn.hpp"
+#include "ipc_hv_soa_inn.hpp"
 
 extern std::atomic_bool g_init_flag;
 extern std::shared_ptr<ipc_hv_soa_client> g_client;
@@ -7,7 +7,7 @@ extern std::shared_ptr<ipc_hv_soa_client> g_client;
 static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size)
 {
     int32_t ret = IPC_HV_SOA_RET_SUCCESS;
-    
+
     if (nullptr == g_client->m_daemon_io)
     {
         LOG_PRINT_ERROR("m_daemon_io is nullptr");
@@ -21,7 +21,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata
     }
 
     LOG_PRINT_DEBUG("send msg_id[%d] to daemon fd[%d]", msg_id, hio_fd(g_client->m_daemon_io));
-    
+
     // Encode message
     std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + field_size, 0);
     pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
@@ -49,7 +49,11 @@ static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata
     if (ret < 0)
     {
         LOG_PRINT_ERROR("hio_write fail, ret[%d], error[%d]", ret, hio_error(g_client->m_daemon_io));
-        return IPC_HV_SOA_RET_FAIL;
+        ret = IPC_HV_SOA_RET_FAIL;
+    }
+    else
+    {
+        ret = IPC_HV_SOA_RET_SUCCESS;
     }
 
     return ret;
@@ -394,7 +398,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
         if (ret < 0)
         {
             LOG_PRINT_ERROR("hio_write fail, ret[%d], error[%d]", ret, hio_error(dest->client_send_io));
-            return IPC_HV_SOA_RET_FAIL;
+            ret = IPC_HV_SOA_RET_FAIL;
         }
         else
         {
@@ -524,6 +528,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         }
         else
         {
+            ret = IPC_HV_SOA_RET_SUCCESS;
             // init
             auto timeout = std::chrono::milliseconds(timeout_ms);
             dest->send_msg_cond_ret = -1;
@@ -614,16 +619,15 @@ int32_t register_client_req()
     // Use the new sync function to send request and wait for response
     st_register_client_resp resp = st_register_client_resp_init_zero;
     uint32_t resp_size = sizeof(st_register_client_resp);
-    
+
     ret = send_msg_to_daemon_sync(
         LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT,
-        &req, 
-        st_register_client_req_fields, 
+        &req,
+        st_register_client_req_fields,
         st_register_client_req_size,
         &resp,
         &resp_size,
-        LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS
-    );
+        LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
 
     if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
@@ -634,15 +638,15 @@ int32_t register_client_req()
     // Validate response
     if (resp.client_pid != g_client->client_pid)
     {
-        LOG_PRINT_ERROR("register client_id fail, client_pid[%d] != resp.client_pid[%d]", 
+        LOG_PRINT_ERROR("register client_id fail, client_pid[%d] != resp.client_pid[%d]",
                         g_client->client_pid, resp.client_pid);
         return IPC_HV_SOA_RET_FAIL;
     }
 
     g_client->client_id = resp.client_id;
-    LOG_PRINT_INFO("register client success, client_id[%u], client_pid[%u]", 
+    LOG_PRINT_INFO("register client success, client_id[%u], client_pid[%u]",
                    g_client->client_id, g_client->client_pid);
-    
+
     return IPC_HV_SOA_RET_SUCCESS;
 }
 
