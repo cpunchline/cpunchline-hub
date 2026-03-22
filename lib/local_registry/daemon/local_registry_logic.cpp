@@ -54,14 +54,13 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
     }
     LOG_PRINT_DEBUG("onMessage msg_id[%u], msg_len[%u]", recv_msg_header->msg_id, recv_msg_header->msg_len);
 
-#if NANOPB_SUPPORT_OPTION
     uint16_t module_id = (uint16_t)(recv_msg_header->msg_id >> 16);
     if (module_id != MODULE_ID_AUTOLIB_LOCAL_REGISTRY)
     {
         LOG_PRINT_ERROR("module_id[%u] != [%u]", module_id, MODULE_ID_AUTOLIB_LOCAL_REGISTRY);
         return;
     }
-#endif
+
     uint8_t *buffer = (uint8_t *)inbuf->data() + LOCAL_REGISTRY_MSG_HEADER_SIZE;
     pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
     switch (recv_msg_header->msg_id)

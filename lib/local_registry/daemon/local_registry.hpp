@@ -7,7 +7,7 @@ struct local_client;
 // 服务项
 struct local_service_item
 {
-    uint32_t service_id;                                                           // 服务ID
+    uint32_t service_id;                                                           // 服务ID(Module ID + Msg ID)
     uint32_t service_type;                                                         // 服务类型 see local_service_type
     uint32_t service_status;                                                       // 服务状态 see local_service_status
     std::shared_ptr<local_client> service_provider;                                // 服务提供者

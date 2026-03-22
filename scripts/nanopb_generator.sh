@@ -98,7 +98,7 @@ for i in $(ls ${NANOPB_PROTO_DIR}/*.proto); do
 			if [ "${clean_value}" -gt "${NANOPB_LIMIT_MSG_MAX_SIZE}" ]; then
 				logerr "FATAL: Module '${module_name}' exceeds size limit!"
 				logerr "  Macro: ${macro} = ${clean_value} bytes"
-				logerr "  Limit: ${NANOPB_LIMIT_MSG_MAX_SIZE} bytes (16KB)"
+				logerr "  Limit: ${NANOPB_LIMIT_MSG_MAX_SIZE} bytes"
 				logerr "Action: Please reduce message size or increase limit if absolutely necessary."
 				exit 1
 			fi
