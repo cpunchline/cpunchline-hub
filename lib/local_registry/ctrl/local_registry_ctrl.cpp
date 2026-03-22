@@ -113,7 +113,7 @@ int main()
 
         uint8_t *buffer = (uint8_t *)inbuf;
         pb_istream_t stream = pb_istream_from_buffer(&(buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE]), recv_msg_header->msg_len);
-        switch (recv_msg_header->msg_id)
+        switch (recv_msg_header->service_id)
         {
             case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS:
                 {
@@ -121,7 +121,7 @@ int main()
                     status = pb_decode(&stream, st_ctrl_get_clients_fields, &get_clients_info);
                     if (!status)
                     {
-                        LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
+                        LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
                         break;
                     }
 
@@ -185,7 +185,7 @@ int main()
                     status = pb_decode(&stream, st_ctrl_get_services_fields, &get_services_info);
                     if (!status)
                     {
-                        LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
+                        LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
                         break;
                     }
 
@@ -292,7 +292,7 @@ int main()
                 break;
             default:
                 {
-                    LOG_PRINT_ERROR("unknown msg_id[%d]", recv_msg_header->msg_id);
+                    LOG_PRINT_ERROR("unknown service_id[%d]", recv_msg_header->service_id);
                     break;
                 }
         }

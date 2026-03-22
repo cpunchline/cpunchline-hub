@@ -70,7 +70,7 @@
             "client_id": "uint32",
             "msg_seqid": "uint32",
             "msg_type": "uint32",
-            "msg_id": "uint32",
+            "service_id": "uint32",
             "msg_len": "uint32"
         },
         "st_local_service_item": {

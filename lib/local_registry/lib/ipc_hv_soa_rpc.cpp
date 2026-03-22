@@ -34,7 +34,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata
 
     // Build message header
     st_local_msg_header send_msg_header = {};
-    send_msg_header.msg_id = msg_id;
+    send_msg_header.service_id = msg_id;
     send_msg_header.msg_len = (uint32_t)stream.bytes_written;
     memcpy(buffer.data(), &send_msg_header, sizeof(send_msg_header));
 
@@ -294,7 +294,7 @@ int32_t connect_with_process_client(std::shared_ptr<ipc_hv_soa_process_client> c
     return ret;
 }
 
-int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uint32_t client_id, uint32_t msg_seqid, uint32_t msg_type, uint32_t service_id, uint32_t msgdata_len, const void *msgdata)
+int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uint32_t client_id, uint32_t msg_seqid, uint32_t msg_type, uint32_t service_id, uint32_t msg_len, const void *msgdata)
 {
     if (nullptr == dest)
     {
@@ -349,7 +349,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
         }
 
         size_t encoded_size = 0;
-        if (nullptr != msgdata && msgdata_len > 0)
+        if (nullptr != msgdata && msg_len > 0)
         {
             if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
             {
@@ -381,15 +381,15 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
             LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
         }
 #else
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msgdata_len);
+        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msg_len);
         memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
         memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
         memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
         memcpy(buffer.data() + 3 * sizeof(uint32_t), &service_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 4 * sizeof(uint32_t), &msgdata_len, sizeof(uint32_t));
-        if (nullptr != msgdata && msgdata_len > 0)
+        memcpy(buffer.data() + 4 * sizeof(uint32_t), &msg_len, sizeof(uint32_t));
+        if (nullptr != msgdata && msg_len > 0)
         {
-            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msgdata_len);
+            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msg_len);
         }
 #endif
 
@@ -413,7 +413,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
     return ret;
 }
 
-int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest, uint32_t client_id, uint32_t msg_seqid, uint32_t service_id, uint32_t msgdata_len, const void *msgdata, void *method_resp_data, uint32_t *method_resp_data_len, uint32_t timeout_ms)
+int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest, uint32_t client_id, uint32_t msg_seqid, uint32_t service_id, uint32_t msg_len, const void *msgdata, void *method_resp_data, uint32_t *method_resp_data_len, uint32_t timeout_ms)
 {
     if (nullptr == dest)
     {
@@ -453,7 +453,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
 
         uint32_t msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC;
 #if NANOPB_SUPPORT_OPTION
-        (void)msgdata_len;
+        (void)msg_len;
         const pb_msgdesc_t *fields = nullptr;
         uint16_t module_id = (uint16_t)(service_id >> 16);
         uint16_t msg_id = (uint16_t)(service_id & 0xFFFF);
@@ -474,7 +474,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         fields = pitem->in_fields;
 
         size_t encoded_size = 0;
-        if (nullptr != msgdata && msgdata_len > 0)
+        if (nullptr != msgdata && msg_len > 0)
         {
             if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
             {
@@ -506,15 +506,15 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
             LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
         }
 #else
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msgdata_len);
+        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msg_len);
         memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
         memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
         memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
         memcpy(buffer.data() + 3 * sizeof(uint32_t), &service_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 4 * sizeof(uint32_t), &msgdata_len, sizeof(uint32_t));
-        if (nullptr != msgdata && msgdata_len > 0)
+        memcpy(buffer.data() + 4 * sizeof(uint32_t), &msg_len, sizeof(uint32_t));
+        if (nullptr != msgdata && msg_len > 0)
         {
-            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msgdata_len);
+            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msg_len);
         }
 #endif
 

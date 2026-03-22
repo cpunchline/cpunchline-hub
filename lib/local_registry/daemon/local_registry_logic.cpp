@@ -44,106 +44,121 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
         return;
     }
 
-    bool status = false;
     uint32_t real_readbytes = (uint32_t)((uint32_t)inbuf->size() - LOCAL_REGISTRY_MSG_HEADER_SIZE);
     st_local_msg_header *recv_msg_header = (st_local_msg_header *)inbuf->data();
+    LOG_PRINT_DEBUG("onMessage service_id[%u], msg_type[%u], msg_seqid[%d], msg_len[%u]",
+                    recv_msg_header->service_id,
+                    recv_msg_header->msg_type,
+                    recv_msg_header->msg_seqid,
+                    recv_msg_header->msg_len);
     if (real_readbytes != recv_msg_header->msg_len)
     {
         LOG_PRINT_ERROR("msg_len[%u] != real_readbytes[%u]", recv_msg_header->msg_len, real_readbytes);
         return;
     }
-    LOG_PRINT_DEBUG("onMessage msg_id[%u], msg_len[%u]", recv_msg_header->msg_id, recv_msg_header->msg_len);
 
-    uint16_t module_id = (uint16_t)(recv_msg_header->msg_id >> 16);
-    if (module_id != MODULE_ID_AUTOLIB_LOCAL_REGISTRY)
+    uint8_t pstruct[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+#if NANOPB_SUPPORT_OPTION
+    const pb_msgdesc_t *fields = nullptr;
+    uint32_t fields_size = 0;
+    uint16_t module_id = (uint16_t)(recv_msg_header->service_id >> 16);
+    uint16_t msg_id = (uint16_t)(recv_msg_header->service_id & 0xFFFF);
+    const st_autolib_servicemap *pmap = gst_autolib_servicemap[module_id];
+    if (nullptr == pmap)
     {
-        LOG_PRINT_ERROR("module_id[%u] != [%u]", module_id, MODULE_ID_AUTOLIB_LOCAL_REGISTRY);
+        LOG_PRINT_ERROR("module_id[%u] not found", module_id);
+        return;
+    }
+    const st_autolib_servicemap_item *pitem = &pmap->items[msg_id - 1];
+    if (nullptr == pitem)
+    {
+        LOG_PRINT_ERROR("service_id[%u]  not found", recv_msg_header->service_id);
         return;
     }
 
-    uint8_t *buffer = (uint8_t *)inbuf->data() + LOCAL_REGISTRY_MSG_HEADER_SIZE;
-    pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
-    switch (recv_msg_header->msg_id)
+    if (recv_msg_header->msg_type == LOCAL_MSG_TYPE_METHOD_RESPONSE_SYNC || recv_msg_header->msg_type == LOCAL_MSG_TYPE_METHOD_RESPONSE_ASYNC)
+    {
+        fields = pitem->out_fields;
+        fields_size = pitem->out_size;
+    }
+    else
+    {
+        fields = pitem->in_fields;
+        fields_size = pitem->in_size;
+    }
+
+    if (recv_msg_header->msg_len > 0)
+    {
+        if (fields_size == 0)
+        {
+            LOG_PRINT_ERROR("msg_len[%u] > 0, but fields_size[%u] = 0", recv_msg_header->msg_len, fields_size);
+            return;
+        }
+
+        uint8_t *buffer = (uint8_t *)inbuf->data() + LOCAL_REGISTRY_MSG_HEADER_SIZE;
+        pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
+        bool status = pb_decode(&stream, fields, pstruct);
+        if (!status)
+        {
+            LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
+            return;
+        }
+        LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+    }
+#else
+    if (recv_msg_header->msg_len > 0)
+    {
+        memcpy(pstruct, (uint8_t *)inbuf->data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
+    }
+#endif
+
+    switch (recv_msg_header->service_id)
     {
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT:
             {
-                st_register_client_req req = st_register_client_req_init_zero;
-                status = pb_decode(&stream, st_register_client_req_fields, &req);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
-                    break;
-                }
-                registry->register_client(&req, channel);
+                st_register_client_req *req = (st_register_client_req *)pstruct;
+                registry->register_client(req, channel);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_CLIENT:
             {
-                st_get_client_req req = st_get_client_req_init_zero;
-                status = pb_decode(&stream, st_get_client_req_fields, &req);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
-                    break;
-                }
-                registry->get_client(&req, channel);
+                st_get_client_req *req = (st_get_client_req *)pstruct;
+                registry->get_client(req, channel);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_SERVICE:
             {
-                st_register_service msg = st_register_service_init_zero;
-                status = pb_decode(&stream, st_register_service_fields, &msg);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
-                    break;
-                }
-                registry->register_service(&msg);
+                st_register_service *msg = (st_register_service *)pstruct;
+                registry->register_service(msg);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTEN_SERVICE:
             {
-                st_listen_service msg = st_listen_service_init_zero;
-                status = pb_decode(&stream, st_listen_service_fields, &msg);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
-                    break;
-                }
-                registry->listen_service(&msg);
+                st_listen_service *msg = (st_listen_service *)pstruct;
+                registry->listen_service(msg);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_SERVICE:
             {
-                st_get_service_req req = st_get_service_req_init_zero;
-                status = pb_decode(&stream, st_get_service_req_fields, &req);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
-                    break;
-                }
-                if (req.has_listener_client)
+                st_get_service_req *req = (st_get_service_req *)pstruct;
+                if (req->has_listener_client)
                 {
                     LOG_PRINT_DEBUG("get service req client_id[%u]-client_name[%s]-service_id[%u]",
-                                    req.listener_client.client_id, req.listener_client.client_name, req.service_id);
+                                    req->listener_client.client_id,
+                                    req->listener_client.client_name,
+                                    req->service_id);
                 }
                 else
                 {
-                    LOG_PRINT_DEBUG("get service req service_id[%u]", req.service_id);
+                    LOG_PRINT_DEBUG("get service req service_id[%u]", req->service_id);
                 }
-                registry->get_service(&req);
+                registry->get_service(req);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_SET_STATUS:
             {
-                st_service_set_status msg = st_service_set_status_init_zero;
-                status = pb_decode(&stream, st_service_set_status_fields, &msg);
-                if (!status)
-                {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
-                    break;
-                }
-                registry->service_set_status(&msg);
+                st_service_set_status *msg = (st_service_set_status *)pstruct;
+                registry->service_set_status(msg);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS:
@@ -155,7 +170,7 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
             registry->ctr_get_services(channel);
             break;
         default:
-            LOG_PRINT_ERROR("invalid msg_id[%d]", recv_msg_header->msg_id);
+            LOG_PRINT_ERROR("invalid service_id[%d]", recv_msg_header->service_id);
             break;
     }
 }
@@ -187,7 +202,7 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
     else
     {
         st_local_msg_header send_msg_header = {};
-        send_msg_header.msg_id = msg_id;
+        send_msg_header.service_id = msg_id;
         send_msg_header.msg_len = (uint32_t)stream.bytes_written;
         memcpy(buffer, &send_msg_header, sizeof(send_msg_header));
         ret = client_channel->write(buffer, (int)(LOCAL_REGISTRY_MSG_HEADER_SIZE + stream.bytes_written));

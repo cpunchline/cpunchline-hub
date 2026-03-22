@@ -95,7 +95,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
         return;
     }
 
-    LOG_PRINT_DEBUG("on_recv_daemon msg_id[%u], msg_len[%u]", recv_msg_header->msg_id, recv_msg_header->msg_len);
+    LOG_PRINT_DEBUG("on_recv_daemon service_id[%u], msg_len[%u]", recv_msg_header->service_id, recv_msg_header->msg_len);
 
     char resp[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
     uint32_t resp_size = 0;
@@ -103,13 +103,13 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
     uint8_t *buffer = (uint8_t *)buf + LOCAL_REGISTRY_MSG_HEADER_SIZE;
     pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
 
-    uint16_t module_id = (uint16_t)(recv_msg_header->msg_id >> 16);
+    uint16_t module_id = (uint16_t)(recv_msg_header->service_id >> 16);
     if (module_id != MODULE_ID_AUTOLIB_LOCAL_REGISTRY)
     {
         LOG_PRINT_ERROR("module_id[%u] != [%u]", module_id, MODULE_ID_AUTOLIB_LOCAL_REGISTRY);
         return;
     }
-    switch (recv_msg_header->msg_id)
+    switch (recv_msg_header->service_id)
     {
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT:
             {
@@ -118,7 +118,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 status = pb_decode(&stream, st_register_client_resp_fields, resp);
                 if (!status)
                 {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
+                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
                     ret = -1;
                 }
                 else
@@ -136,7 +136,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 status = pb_decode(&stream, st_get_client_resp_fields, resp);
                 if (!status)
                 {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
+                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
                     ret = -1;
                 }
                 else
@@ -157,7 +157,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 status = pb_decode(&stream, st_get_service_resp_fields, resp);
                 if (!status)
                 {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
+                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
                     ret = -1;
                 }
                 else
@@ -173,7 +173,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 status = pb_decode(&stream, st_service_change_status_fields, resp);
                 if (!status)
                 {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
+                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
                 }
                 else
                 {
@@ -231,7 +231,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 status = pb_decode(&stream, st_listener_change_to_provider_fields, resp);
                 if (!status)
                 {
-                    LOG_PRINT_ERROR("pb_decode msg_id[%d] fail, error(%s)", recv_msg_header->msg_id, PB_GET_ERROR(&stream));
+                    LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
                 }
                 else
                 {
@@ -306,7 +306,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
     }
 
     std::lock_guard<std::mutex> daemon_lock{g_client->daemo_mutex};
-    g_client->daemon_cond_msgid = recv_msg_header->msg_id;
+    g_client->daemon_cond_msgid = recv_msg_header->service_id;
     memcpy(g_client->daemon_cond_msgdata, resp, resp_size);
     g_client->daemon_cond_ret = ret;
     g_client->daemon_cond.notify_one();
@@ -314,7 +314,6 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
 
 void on_recv_process(hio_t *io, void *buf, int readbytes)
 {
-    uint8_t *buffer = (uint8_t *)buf;
     LOG_PRINT_DEBUG("on_recv_process fd[%d], readbytes[%d]", hio_fd(io), readbytes);
     if (readbytes < (int)LOCAL_REGISTRY_MSG_HEADER_SIZE)
     {
@@ -323,27 +322,24 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
     }
 
     uint32_t real_readbytes = (uint32_t)((uint32_t)readbytes - LOCAL_REGISTRY_MSG_HEADER_SIZE);
-    uint32_t client_id, msg_seqid, msg_type, service_id, msgdata_len;
-    memcpy(&client_id, buffer + 0 * sizeof(uint32_t), sizeof(uint32_t));
-    memcpy(&msg_seqid, buffer + 1 * sizeof(uint32_t), sizeof(uint32_t));
-    memcpy(&msg_type, buffer + 2 * sizeof(uint32_t), sizeof(uint32_t));
-    memcpy(&service_id, buffer + 3 * sizeof(uint32_t), sizeof(uint32_t));
-    memcpy(&msgdata_len, buffer + 4 * sizeof(uint32_t), sizeof(uint32_t));
-    if (real_readbytes != msgdata_len)
+    st_local_msg_header *recv_msg_header = (st_local_msg_header *)buf;
+    LOG_PRINT_DEBUG("on_recv_process service_id[%u], msg_type[%u], msg_seqid[%d], msg_len[%u]",
+                    recv_msg_header->service_id,
+                    recv_msg_header->msg_type,
+                    recv_msg_header->msg_seqid,
+                    recv_msg_header->msg_len);
+    if (real_readbytes != recv_msg_header->msg_len)
     {
-        LOG_PRINT_ERROR("msg_len[%u] != real_readbytes[%u]", msgdata_len, real_readbytes);
+        LOG_PRINT_ERROR("msg_len[%u] != real_readbytes[%u]", recv_msg_header->msg_len, real_readbytes);
         return;
     }
-
-    LOG_PRINT_DEBUG("on_recv_process service_id[%u], msg_type[%u], msg_seqid[%d], msg_len[%u]", service_id, msg_type, msg_seqid, msgdata_len);
 
     uint8_t pstruct[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
 #if NANOPB_SUPPORT_OPTION
     const pb_msgdesc_t *fields = nullptr;
     uint32_t fields_size = 0;
-
-    uint16_t module_id = (uint16_t)(service_id >> 16);
-    uint16_t msg_id = (uint16_t)(service_id & 0xFFFF);
+    uint16_t module_id = (uint16_t)(recv_msg_header->service_id >> 16);
+    uint16_t msg_id = (uint16_t)(recv_msg_header->service_id & 0xFFFF);
     const st_autolib_servicemap *pmap = gst_autolib_servicemap[module_id];
     if (nullptr == pmap)
     {
@@ -353,11 +349,11 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
     const st_autolib_servicemap_item *pitem = &pmap->items[msg_id - 1];
     if (nullptr == pitem)
     {
-        LOG_PRINT_ERROR("service_id[%u] not found", service_id);
+        LOG_PRINT_ERROR("service_id[%u] not found", recv_msg_header->service_id);
         return;
     }
 
-    if (msg_type == E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC || msg_type == E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_ASYNC)
+    if (recv_msg_header->msg_type == E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC || recv_msg_header->msg_type == E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_ASYNC)
     {
         fields = pitem->out_fields;
         fields_size = pitem->out_size;
@@ -368,41 +364,47 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
         fields_size = pitem->in_size;
     }
 
-    if (msgdata_len > 0)
+    if (recv_msg_header->msg_len > 0)
     {
         if (fields_size == 0)
         {
-            LOG_PRINT_ERROR("msgdata_len[%u] > 0, but fields_size[%u] = 0", msgdata_len, fields_size);
+            LOG_PRINT_ERROR("msg_len[%u] > 0, but fields_size[%u] = 0", recv_msg_header->msg_len, fields_size);
             return;
         }
 
-        pb_istream_t stream = pb_istream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata_len);
+        uint8_t *buffer = (uint8_t *)buf + LOCAL_REGISTRY_MSG_HEADER_SIZE;
+        pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
         bool status = pb_decode(&stream, fields, pstruct);
         if (!status)
         {
-            LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
+            LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
             return;
         }
-        LOG_PRINT_DEBUG("pb_decode service_id[%d] success", service_id);
+        LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+    }
+#else
+    if (recv_msg_header->msg_len > 0)
+    {
+        memcpy(pstruct, (uint8_t *)buf + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
     }
 #endif
 
-    if (msg_type != E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC)
+    if (recv_msg_header->msg_type != E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC)
     {
         ipc_hv_soa_process_client_data client_data = {};
-        client_data.service_id = service_id;
-        client_data.msg_type = msg_type;
-        client_data.msg_seqid = msg_seqid;
-        client_data.client_id = client_id;
+        client_data.service_id = recv_msg_header->service_id;
+        client_data.msg_type = recv_msg_header->msg_type;
+        client_data.msg_seqid = recv_msg_header->msg_seqid;
+        client_data.client_id = recv_msg_header->client_id;
 
-        if (msgdata_len > 0)
+        if (recv_msg_header->msg_len > 0)
         {
 #if NANOPB_SUPPORT_OPTION
             client_data.data_len = fields_size;
             memcpy(client_data.data, pstruct, fields_size);
 #else
-            client_data.data_len = msgdata_len;
-            memcpy(client_data.data, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata_len);
+            client_data.data_len = recv_msg_header->msg_len;
+            memcpy(client_data.data, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
 #endif
         }
         else
@@ -415,14 +417,13 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
     else
     {
 #if NANOPB_SUPPORT_OPTION
-        ipc_hv_soa_inn_sync_complete(service_id, msg_seqid, pstruct, msgdata_len);
+        ipc_hv_soa_inn_sync_complete(recv_msg_header->service_id, recv_msg_header->msg_seqid, pstruct, recv_msg_header->msg_len);
 #else
-        if (msgdata_len > 0)
+        if (msg_len > 0)
         {
-            memset(pstruct, 0x00, msgdata_len);
-            memcpy(pstruct, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata_len);
+            memcpy(pstruct, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
         }
-        ipc_hv_soa_inn_sync_complete(service_id, msg_seqid, pstruct, msgdata_len);
+        ipc_hv_soa_inn_sync_complete(service_id, msg_seqid, pstruct, recv_msg_header->msg_len);
 #endif
     }
 }
