@@ -1,4 +1,4 @@
-#include "ipc_hv_soa_inn.hpp"
+#include "ipc_hv_soa_common.hpp"
 
 extern std::atomic_bool g_init_flag;
 extern std::shared_ptr<ipc_hv_soa_client> g_client;

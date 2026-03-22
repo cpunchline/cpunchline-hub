@@ -115,10 +115,10 @@ target_include_directories(${IPC_HV_SOA}-deps INTERFACE lib)
 target_link_libraries(${IPC_HV_SOA}-deps INTERFACE hv)
 
 add_library(${IPC_HV_SOA}-object OBJECT
-    lib/ipc_hv_soa_inn_timer.cpp
-    lib/ipc_hv_soa_inn_map.cpp
-    lib/ipc_hv_soa_inn_io.cpp
-    lib/ipc_hv_soa_inn.cpp
+    lib/ipc_hv_soa_timer.cpp
+    lib/ipc_hv_soa_map.cpp
+    lib/ipc_hv_soa_io.cpp
+    lib/ipc_hv_soa_rpc.cpp
     lib/ipc_hv_soa.cpp
 )
 target_link_libraries(${IPC_HV_SOA}-object PRIVATE ${IPC_HV_SOA}-deps)
