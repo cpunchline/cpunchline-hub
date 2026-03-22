@@ -31,15 +31,15 @@ enum
 
 typedef enum _ipc_hv_soa_service_type_e
 {
-    E_IPC_HV_SOA_SERVICE_TYPE_INVALID = 0,
+    E_IPC_HV_SOA_SERVICE_TYPE_UNKNOWN = 0,
     E_IPC_HV_SOA_SERVICE_TYPE_METHOD = 1,
     E_IPC_HV_SOA_SERVICE_TYPE_EVENT = 2,
     E_IPC_HV_SOA_SERVICE_TYPE_MAX,
-} ipc_hv_soa_service_type_e; // same as local_service_type
+} ipc_hv_soa_service_type_e; // same as LOCAL_SERVICE_TYPE
 
 typedef enum _ipc_hv_soa_msg_type_e
 {
-    E_IPC_HV_SOA_MSG_TYPE_INVALID = 0,
+    E_IPC_HV_SOA_MSG_TYPE_UNSUPPORTED = 0,
     E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY = 1,
     E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC = 2,
     E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC = 3,
@@ -47,7 +47,7 @@ typedef enum _ipc_hv_soa_msg_type_e
     E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_ASYNC = 5,
     E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY = 6,
     E_IPC_HV_SOA_MSG_TYPE_MAX,
-} ipc_hv_soa_msg_type_e;
+} ipc_hv_soa_msg_type_e; // same as LOCAL_MSG_TYPE
 
 typedef struct _ipc_hv_soa_msg_handle_t
 {
