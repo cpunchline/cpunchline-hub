@@ -714,7 +714,7 @@ int32_t ipc_hv_soa_method_complete(ipc_hv_soa_msg_handle_t handle, uint32_t serv
 
     int32_t ret = IPC_HV_SOA_RET_SUCCESS;
 
-    uint32_t msg_type = E_IPC_HV_SOA_MSG_TYPE_INVALID;
+    uint32_t msg_type = E_IPC_HV_SOA_MSG_TYPE_UNSUPPORTED;
     if (E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC == handle.msg_type)
     {
         msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC;
