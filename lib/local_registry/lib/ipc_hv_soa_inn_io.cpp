@@ -22,7 +22,7 @@ void on_close(hio_t *io)
     {
         {
             std::unique_lock<std::mutex> daemo_lock(g_client->daemo_mutex);
-            g_client->daemon_cond_ret = INT32_MAX;
+            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_COMPLETE;
             g_client->m_daemon_io = nullptr;
             g_client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
             g_client->daemon_cond.notify_all();
@@ -57,7 +57,7 @@ void on_close(hio_t *io)
                 std::unique_lock<std::mutex> send_msg_lock(client->send_msg_mutex);
                 client->send_msg_seqid = 0;
                 client->send_msg_map.clear();
-                client->send_msg_cond_ret = INT32_MAX;
+                client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_COMPLETE;
                 client->client_send_io = nullptr;
                 client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
                 client->send_msg_cond.notify_all();
@@ -472,7 +472,7 @@ void on_connect(hio_t *io)
             std::unique_lock daemon_lock(g_client->daemo_mutex);
             g_client->daemon_cond_msgid = 0;
             memset(g_client->daemon_cond_msgdata, 0x00, sizeof(g_client->daemon_cond_msgdata));
-            g_client->daemon_cond_ret = INT32_MIN;
+            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_ERROR;
             g_client->daemon_cond.notify_one();
         }
         else
@@ -487,11 +487,11 @@ void on_connect(hio_t *io)
             {
                 if (nullptr != client->client_send_io && hio_id(io) == hio_id(client->client_send_io))
                 {
-                    LOG_PRINT_ERROR("connected with process client[%s]!", client->client_name.c_str());
+                    LOG_PRINT_INFO("connected with process client[%s]!", client->client_name.c_str());
                     std::unique_lock<std::mutex> send_msg_lock(client->send_msg_mutex);
                     client->send_msg_seqid = 0;
                     client->send_msg_map.clear();
-                    client->send_msg_cond_ret = INT32_MIN;
+                    client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_ERROR;
                     client->send_msg_cond.notify_one();
                 }
             }
@@ -499,7 +499,6 @@ void on_connect(hio_t *io)
     }
     else
     {
-        LOG_PRINT_ERROR("peer is closed");
     }
 }
 

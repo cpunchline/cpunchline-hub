@@ -3,6 +3,43 @@
 std::atomic_bool g_init_flag = false;
 std::shared_ptr<ipc_hv_soa_client> g_client = nullptr;
 
+// Helper function to setup unpack settings
+static void _setup_unpack_setting(unpack_setting_t &setting, size_t header_size)
+{
+    setting.mode = UNPACK_BY_LENGTH_FIELD;
+    setting.package_max_length = (unsigned int)header_size + LOCAL_REGISTRY_MSG_SIZE_MAX;
+    setting.body_offset = (unsigned short)header_size;
+    setting.length_field_offset = sizeof(uint32_t);
+    setting.length_field_bytes = sizeof(uint32_t);
+    setting.length_adjustment = 0;
+    setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
+}
+
+// Helper function to create and run event loop
+static hloop_t *_create_event_loop(const char *loop_type, std::thread &loop_thread)
+{
+    hloop_t *loop = hloop_new(HLOOP_FLAG_AUTO_FREE);
+    if (nullptr == loop)
+    {
+        LOG_PRINT_ERROR("%s: hloop_new fail!", loop_type);
+        return nullptr;
+    }
+
+    loop_thread = std::thread([loop, loop_type]()
+                              {
+                                  LOG_PRINT_DEBUG("%s engine[%s]-pid[%ld]-tid[%ld]",
+                                                  loop_type, hio_engine(), hloop_pid(loop), hloop_tid(loop));
+                                  hloop_run(loop);
+                              });
+
+    while (HLOOP_STATUS_RUNNING != hloop_status(loop))
+    {
+        hv_delay(1);
+    }
+
+    return loop;
+}
+
 static void _ipc_hv_logger(int level, const char *buf, int len)
 {
     (void)len;
@@ -32,17 +69,17 @@ static void _ipc_hv_logger(int level, const char *buf, int len)
 
 int32_t ipc_hv_soa_init(uint32_t *client_id)
 {
-    int32_t ret = IPC_HV_SOA_RET_SUCCESS;
-
     if (nullptr == client_id)
     {
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
+    // Setup logging
     hlog_set_handler(_ipc_hv_logger);
     hlog_set_level(LOG_LEVEL_INFO);
     hlog_set_format("HV-%L %s");
 
+    // Check if local_registry is running
     if (0 != access(LOCAL_REGISTRY_SOCKET_PATH, F_OK))
     {
         LOG_PRINT_ERROR("local_registry is not running!");
@@ -57,155 +94,113 @@ int32_t ipc_hv_soa_init(uint32_t *client_id)
 
     g_client = std::make_shared<ipc_hv_soa_client>();
 
-    g_client->daemon_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
-    g_client->daemon_unpack_setting.package_max_length = LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
-    g_client->daemon_unpack_setting.body_offset = LOCAL_REGISTRY_MSG_HEADER_SIZE;
-    g_client->daemon_unpack_setting.length_field_offset = sizeof(uint32_t);
-    g_client->daemon_unpack_setting.length_field_bytes = sizeof(uint32_t);
-    g_client->daemon_unpack_setting.length_adjustment = 0;
-    g_client->daemon_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
-
-    g_client->process_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
-    g_client->process_unpack_setting.package_max_length = LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
-    g_client->process_unpack_setting.body_offset = LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE;
+    // Setup unpack settings
+    _setup_unpack_setting(g_client->daemon_unpack_setting, LOCAL_REGISTRY_MSG_HEADER_SIZE);
+    _setup_unpack_setting(g_client->process_unpack_setting, LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE);
     g_client->process_unpack_setting.length_field_offset = sizeof(uint32_t) * 4;
-    g_client->process_unpack_setting.length_field_bytes = sizeof(uint32_t);
-    g_client->process_unpack_setting.length_adjustment = 0;
-    g_client->process_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
 
+    // Clear maps
     {
         std::lock_guard<std::mutex> process_clients_map_lock(g_client->process_clients_map_mutex);
         g_client->process_clients_map.clear();
     }
-
     {
         std::lock_guard<std::mutex> services_map_lock(g_client->services_map_mutex);
         g_client->services_map.clear();
     }
-
     {
         std::lock_guard<std::mutex> m_timers_map_lock(g_client->m_timers_map_mutex);
         g_client->m_timers_map.clear();
     }
 
-    g_client->m_main_loop = hloop_new(HLOOP_FLAG_AUTO_FREE);
+    // Create event loops
+    g_client->m_main_loop = _create_event_loop("Main", g_client->m_main_loop_thread);
     if (nullptr == g_client->m_main_loop)
     {
-        LOG_PRINT_ERROR("hloop_new fail!");
+        LOG_PRINT_ERROR("Failed to create main loop");
         return IPC_HV_SOA_RET_FAIL;
     }
-    g_client->m_main_loop_thread = std::thread([loop = g_client->m_main_loop]()
-                                               {
-                                                   LOG_PRINT_DEBUG("main engine[%s]-pid[%ld]-tid[%ld]", hio_engine(), hloop_pid(loop), hloop_tid(loop));
-                                                   hloop_run(loop);
-                                               });
 
-    while (HLOOP_STATUS_RUNNING != hloop_status(g_client->m_main_loop))
-    {
-        hv_delay(1);
-    }
-
-    g_client->m_timer_loop = hloop_new(HLOOP_FLAG_AUTO_FREE);
+    g_client->m_timer_loop = _create_event_loop("Timer", g_client->m_timer_loop_thread);
     if (nullptr == g_client->m_timer_loop)
     {
-        LOG_PRINT_ERROR("hloop_new fail!");
+        LOG_PRINT_ERROR("Failed to create timer loop");
         return IPC_HV_SOA_RET_FAIL;
     }
-    g_client->m_timer_loop_thread = std::thread([loop = g_client->m_timer_loop]()
-                                                {
-                                                    LOG_PRINT_DEBUG("timer engine[%s]-pid[%ld]-tid[%ld]", hio_engine(), hloop_pid(loop), hloop_tid(loop));
-                                                    hloop_run(loop);
-                                                });
 
-    while (HLOOP_STATUS_RUNNING != hloop_status(g_client->m_timer_loop))
-    {
-        hv_delay(1);
-    }
-
+    // Create worker loops
     for (size_t i = 0; i < LOCAL_REGISTRY_CLIENT_HV_LOOP_NUM_MAX; ++i)
     {
-        hloop_t *loop = hloop_new(HLOOP_FLAG_AUTO_FREE);
+        hloop_t *loop = _create_event_loop("Worker", g_client->m_worker_threads.emplace_back());
         if (nullptr == loop)
         {
-            LOG_PRINT_ERROR("Failed to create loop");
-            for (i = 0; i < g_client->m_worker_loops.size(); ++i)
+            LOG_PRINT_ERROR("Failed to create worker loop");
+            // Cleanup on failure
+            for (auto &existing_loop : g_client->m_worker_loops)
             {
-                hloop_free(&g_client->m_worker_loops[i]);
+                hloop_free(&existing_loop);
             }
             exit(-1);
         }
         g_client->m_worker_loops.emplace_back(loop);
-        g_client->m_worker_threads.emplace_back([loop]()
-                                                {
-                                                    LOG_PRINT_DEBUG("worker engine[%s]-pid[%ld]-tid[%ld]", hio_engine(), hloop_pid(loop), hloop_tid(loop));
-                                                    hloop_run(loop);
-                                                });
-
-        while (HLOOP_STATUS_RUNNING != hloop_status(loop))
-        {
-            hv_delay(1);
-        }
     }
 
+    // Start message handler thread
     g_client->msg_handler_thread = std::thread(process_msg_handler);
 
-    // usleep(100 * 1000); // to wait thread run
+    // Initialize client info
+    g_client->client_pid = getpid();
 
+    char client_name[LOCAL_REGISTRY_CLIENT_NAME_MAX] = {};
+    if (0 != util_get_exec_name(g_client->client_pid, client_name, sizeof(client_name)))
     {
-        g_client->client_pid = getpid();
-        char client_name[LOCAL_REGISTRY_CLIENT_NAME_MAX] = {};
-        if (0 != util_get_exec_name(g_client->client_pid, client_name, sizeof(client_name)))
-        {
-            LOG_PRINT_ERROR("util_get_exec_name fail!");
-            return IPC_HV_SOA_RET_FAIL;
-        }
-        g_client->client_name = client_name;
+        LOG_PRINT_ERROR("util_get_exec_name fail!");
+        return IPC_HV_SOA_RET_FAIL;
+    }
+    g_client->client_name = client_name;
 
-        char client_localaddr[LOCAL_REGISTRY_SOCKET_LEN_MAX] = {};
-        snprintf(client_localaddr, sizeof(client_localaddr), LOCAL_REGISTEY_SOCKET_FMT, g_client->client_pid, client_name);
-        g_client->client_localaddr = client_localaddr;
+    char client_localaddr[LOCAL_REGISTRY_SOCKET_LEN_MAX] = {};
+    snprintf(client_localaddr, sizeof(client_localaddr), LOCAL_REGISTEY_SOCKET_FMT, g_client->client_pid, client_name);
+    g_client->client_localaddr = client_localaddr;
 
-        // get client id from daemon
-        ret = connect_with_daemon();
-        if (IPC_HV_SOA_RET_SUCCESS != ret)
-        {
-            LOG_PRINT_ERROR("connect_with_daemon fail, ret[%d]!", ret);
-            return IPC_HV_SOA_RET_FAIL;
-        }
-
-        ret = register_client_req();
-        if (IPC_HV_SOA_RET_SUCCESS != ret)
-        {
-            LOG_PRINT_ERROR("register_client_req fail, ret[%d]!", ret);
-            return IPC_HV_SOA_RET_FAIL;
-        }
+    // Connect and register with daemon
+    int32_t ret = connect_with_daemon();
+    if (IPC_HV_SOA_RET_SUCCESS != ret)
+    {
+        LOG_PRINT_ERROR("connect_with_daemon fail, ret[%d]!", ret);
+        return ret;
     }
 
+    ret = register_client_req();
+    if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
-        char client_localaddr1[LOCAL_REGISTRY_SOCKET_LEN_MAX] = {};
-        snprintf(client_localaddr1, sizeof(client_localaddr1), LOCAL_REGISTEY_SOCKET_FMT1, g_client->client_id);
-        g_client->client_localaddr1 = client_localaddr1;
-
-        // listen process clients
-        unlink(client_localaddr1);
-        g_client->m_listen_io = hio_create_socket(g_client->m_main_loop, client_localaddr1, -1, HIO_TYPE_SOCK_STREAM, HIO_SERVER_SIDE);
-        if (nullptr == g_client->m_listen_io)
-        {
-            LOG_PRINT_ERROR("hio_create_socket fail!");
-            return IPC_HV_SOA_RET_FAIL;
-        }
-        hio_setcb_close(g_client->m_listen_io, on_close);
-        hio_setcb_accept(g_client->m_listen_io, on_accept);
-        hio_accept(g_client->m_listen_io);
+        LOG_PRINT_ERROR("register_client_req fail, ret[%d]!", ret);
+        return ret;
     }
 
+    // Setup local socket for listening to process clients
+    char client_localaddr1[LOCAL_REGISTRY_SOCKET_LEN_MAX] = {};
+    snprintf(client_localaddr1, sizeof(client_localaddr1), LOCAL_REGISTEY_SOCKET_FMT1, g_client->client_id);
+    g_client->client_localaddr1 = client_localaddr1;
+
+    unlink(client_localaddr1);
+    g_client->m_listen_io = hio_create_socket(g_client->m_main_loop, client_localaddr1, -1, HIO_TYPE_SOCK_STREAM, HIO_SERVER_SIDE);
+    if (nullptr == g_client->m_listen_io)
+    {
+        LOG_PRINT_ERROR("hio_create_socket fail!");
+        return IPC_HV_SOA_RET_FAIL;
+    }
+
+    hio_setcb_close(g_client->m_listen_io, on_close);
+    hio_setcb_accept(g_client->m_listen_io, on_accept);
+    hio_accept(g_client->m_listen_io);
+
+    // Register self in process clients map
     auto it = save_process_client(g_client->client_id, g_client->client_name);
     *client_id = it->client_id;
 
     g_init_flag = true;
-    ret = IPC_HV_SOA_RET_SUCCESS;
-
-    return ret;
+    return IPC_HV_SOA_RET_SUCCESS;
 }
 
 int32_t ipc_hv_soa_destroy(uint32_t client_id)

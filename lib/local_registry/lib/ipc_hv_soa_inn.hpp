@@ -129,9 +129,10 @@ void on_accept(hio_t *io);
 
 // inn
 void process_msg_handler(void);
+int32_t send_msg_to_daemon(uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size);
+int32_t send_msg_to_daemon_sync(uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size, void *resp_data, uint32_t *resp_data_len, uint32_t timeout_ms);
 int32_t connect_with_daemon();
 int32_t connect_with_process_client(std::shared_ptr<ipc_hv_soa_process_client> dest);
-int32_t send_msg_to_daemon(uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size);
 int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uint32_t client_id, uint32_t msg_seqid, uint32_t msg_type, uint32_t service_id, uint32_t msgdata_len, const void *msgdata);
 int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest, uint32_t client_id, uint32_t msg_seqid, uint32_t service_id, uint32_t msgdata_len, const void *msgdata, void *method_resp_data, uint32_t *method_resp_data_len, uint32_t timeout_ms);
 
