@@ -1,5 +1,6 @@
 #include <semaphore.h>
 #include "local_registry_common.hpp"
+#include "generator_autolib.h"
 
 std::vector<st_local_client_info> g_clients_info = {};
 std::vector<st_local_service_info> g_services_info = {};
@@ -46,9 +47,9 @@ int main()
 
     unpack_setting_t unpack_setting = {};
     unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
-    unpack_setting.package_max_length = DEFAULT_PACKAGE_MAX_LENGTH;
-    unpack_setting.body_offset = sizeof(st_local_msg_header);
-    unpack_setting.length_field_offset = sizeof(uint32_t);
+    unpack_setting.package_max_length = LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
+    unpack_setting.body_offset = LOCAL_REGISTRY_MSG_HEADER_SIZE;
+    unpack_setting.length_field_offset = LOCAL_REGISTRY_MSG_HEADER_SIZE - sizeof(uint32_t);
     unpack_setting.length_field_bytes = sizeof(uint32_t);
     unpack_setting.length_adjustment = 0;
     unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
@@ -60,36 +61,45 @@ int main()
     }
     ctrl_client.bind(LOCAL_REGISTRY_CTRL_SOCKET_PATH);
 
-    ctrl_client.onConnection = [&ctrl_client](const hv::SocketChannelPtr &channel)
+    ctrl_client.onConnection = [](const hv::SocketChannelPtr &channel)
     {
         if (channel->isConnected())
         {
             LOG_PRINT_DEBUG("connected to %s! connfd=%d\n", channel->peeraddr().c_str(), channel->fd());
 
-            LOG_PRINT_INFO("get clients req to daemon");
+            uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+            st_local_msg_header send_msg_header = {};
+
             // get clients
-            uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE] = {};
-            uint32_t msg_id = LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS;
-            uint32_t msg_len = 0;
-            memcpy(buffer, &msg_id, sizeof(msg_id));
-            memcpy(buffer + 4, &msg_len, sizeof(msg_len));
+            LOG_PRINT_INFO("get clients req to daemon");
+            memset(&send_msg_header, 0, LOCAL_REGISTRY_MSG_HEADER_SIZE);
+            memset(buffer, 0, sizeof(buffer));
+            send_msg_header.client_id = UINT32_MAX - 1;
+            send_msg_header.msg_seqid = 1;
+            send_msg_header.msg_type = LOCAL_MSG_TYPE_METHOD_REQUEST_ASYNC;
+            send_msg_header.service_id = LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS;
+            send_msg_header.msg_len = 0;
+            memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE); // no data, so need encode
             channel->write(buffer, sizeof(buffer));
 
             // get services
+            uint8_t buffer1[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+            st_local_msg_header send_msg_header1 = {};
             LOG_PRINT_INFO("get services req to daemon");
-            memset(buffer, 0, sizeof(buffer));
-            msg_id = LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES;
-            memcpy(buffer, &msg_id, sizeof(msg_id));
-            memcpy(buffer + 4, &msg_len, sizeof(msg_len));
-            channel->write(buffer, sizeof(buffer));
+            memset(&send_msg_header1, 0, LOCAL_REGISTRY_MSG_HEADER_SIZE);
+            memset(buffer1, 0, sizeof(buffer1));
+            send_msg_header1.client_id = UINT32_MAX - 1;
+            send_msg_header1.msg_seqid = 2;
+            send_msg_header1.msg_type = LOCAL_MSG_TYPE_METHOD_REQUEST_ASYNC;
+            send_msg_header1.service_id = LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES;
+            send_msg_header1.msg_len = 0;
+            memcpy(buffer1, &send_msg_header1, LOCAL_REGISTRY_MSG_HEADER_SIZE); // no data, so need encode
+            channel->write(buffer1, sizeof(buffer1));
         }
         else
         {
             LOG_PRINT_DEBUG("disconnected to %s! connfd=%d\n", channel->peeraddr().c_str(), channel->fd());
-        }
-        if (ctrl_client.isReconnect())
-        {
-            LOG_PRINT_DEBUG("reconnect cnt=%d, delay=%d\n", ctrl_client.reconn_setting->cur_retry_cnt, ctrl_client.reconn_setting->cur_delay);
+            exit(EXIT_FAILURE);
         }
     };
 
@@ -98,34 +108,78 @@ int main()
         LOG_PRINT_INFO("onMessage channel_id[%d], fd[%d], readbytes[%zu]", channel->id(), channel->fd(), inbuf->size());
         if (inbuf->size() < (int)LOCAL_REGISTRY_MSG_HEADER_SIZE)
         {
-            LOG_PRINT_ERROR("not a complete msg");
+            LOG_PRINT_ERROR("not a complete msg, readbytes[%zu] < header_size[%zu]",
+                            inbuf->size(), LOCAL_REGISTRY_MSG_HEADER_SIZE);
             return;
         }
 
-        bool status = false;
         uint32_t real_readbytes = (uint32_t)((uint32_t)inbuf->size() - LOCAL_REGISTRY_MSG_HEADER_SIZE);
         st_local_msg_header *recv_msg_header = (st_local_msg_header *)inbuf->data();
+        LOG_PRINT_DEBUG("onMessage service_id[%u], msg_type[%u], msg_seqid[%d], msg_len[%u]",
+                        recv_msg_header->service_id,
+                        recv_msg_header->msg_type,
+                        recv_msg_header->msg_seqid,
+                        recv_msg_header->msg_len);
         if (real_readbytes != recv_msg_header->msg_len)
         {
             LOG_PRINT_ERROR("msg_len[%u] != real_readbytes[%u]", recv_msg_header->msg_len, real_readbytes);
             return;
         }
 
-        uint8_t *buffer = (uint8_t *)inbuf;
-        pb_istream_t stream = pb_istream_from_buffer(&(buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE]), recv_msg_header->msg_len);
+        uint8_t pstruct[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+        const pb_msgdesc_t *fields = nullptr;
+        uint32_t fields_size = 0;
+        uint16_t module_id = (uint16_t)(recv_msg_header->service_id >> 16);
+        uint16_t msg_id = (uint16_t)(recv_msg_header->service_id & 0xFFFF);
+        const st_autolib_servicemap *pmap = gst_autolib_servicemap[module_id];
+        if (nullptr == pmap)
+        {
+            LOG_PRINT_ERROR("module_id[%u] not found", module_id);
+            return;
+        }
+        const st_autolib_servicemap_item *pitem = &pmap->items[msg_id - 1];
+        if (nullptr == pitem)
+        {
+            LOG_PRINT_ERROR("service_id[%u]  not found", recv_msg_header->service_id);
+            return;
+        }
+
+        if (recv_msg_header->msg_type == LOCAL_MSG_TYPE_METHOD_RESPONSE_SYNC || recv_msg_header->msg_type == LOCAL_MSG_TYPE_METHOD_RESPONSE_ASYNC)
+        {
+            fields = pitem->out_fields;
+            fields_size = pitem->out_size;
+        }
+        else
+        {
+            fields = pitem->in_fields;
+            fields_size = pitem->in_size;
+        }
+
+        if (recv_msg_header->msg_len > 0)
+        {
+            if (fields_size == 0)
+            {
+                LOG_PRINT_ERROR("msg_len[%u] > 0, but fields_size[%u] = 0", recv_msg_header->msg_len, fields_size);
+                return;
+            }
+
+            uint8_t *buffer = (uint8_t *)inbuf->data() + LOCAL_REGISTRY_MSG_HEADER_SIZE;
+            pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
+            bool status = pb_decode(&stream, fields, pstruct);
+            if (!status)
+            {
+                LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
+                return;
+            }
+            LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+        }
+
         switch (recv_msg_header->service_id)
         {
             case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS:
                 {
-                    st_ctrl_get_clients get_clients_info = st_ctrl_get_clients_init_zero;
-                    status = pb_decode(&stream, st_ctrl_get_clients_fields, &get_clients_info);
-                    if (!status)
-                    {
-                        LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
-                        break;
-                    }
-
-                    if (0 == get_clients_info.more_flag)
+                    st_ctrl_get_clients *get_clients_info = (st_ctrl_get_clients *)pstruct;
+                    if (0 == get_clients_info->more_flag)
                     {
                         if (g_clients_info.size() == 0)
                         {
@@ -155,41 +209,34 @@ int main()
                     }
 #if 0
             // each recv will print
-            LOG_PRINT_INFO("get clients info, client_count[%u], more_flag[%u]", get_clients_info.clients_count, get_clients_info.more_flag);
-            for (size_t i = 0; i < get_clients_info.clients_count; i++)
+            LOG_PRINT_INFO("get clients info, client_count[%u], more_flag[%u]", get_clients_info->clients_count, get_clients_info->more_flag);
+            for (size_t i = 0; i < get_clients_info->clients_count; i++)
             {
                 LOG_PRINT_INFO("client_id[%u], client_pid[%u], client_name[%s], client_status[%u] produce_services_count[%u]",
-                               get_clients_info.clients[i].client_id,
-                               get_clients_info.clients[i].client_pid,
-                               get_clients_info.clients[i].client_name,
-                               get_clients_info.clients[i].client_status,
-                               get_clients_info.clients[i].produce_services_count);
-                for (size_t j = 0; j < get_clients_info.clients[i].produce_services_count; j++)
+                               get_clients_info->clients[i].client_id,
+                               get_clients_info->clients[i].client_pid,
+                               get_clients_info->clients[i].client_name,
+                               get_clients_info->clients[i].client_status,
+                               get_clients_info->clients[i].produce_services_count);
+                for (size_t j = 0; j < get_clients_info->clients[i].produce_services_count; j++)
                 {
                     LOG_PRINT_INFO("service_id[%u], service_type[%u], service_status[%u]",
-                                   get_clients_info.clients[i].produce_services[j].service_id,
-                                   get_clients_info.clients[i].produce_services[j].service_type,
-                                   get_clients_info.clients[i].produce_services[j].service_status);
+                                   get_clients_info->clients[i].produce_services[j].service_id,
+                                   get_clients_info->clients[i].produce_services[j].service_type,
+                                   get_clients_info->clients[i].produce_services[j].service_status);
                 }
             }
 #endif
-                    for (size_t l = 0; l < get_clients_info.clients_count; l++)
+                    for (size_t l = 0; l < get_clients_info->clients_count; l++)
                     {
-                        g_clients_info.push_back(get_clients_info.clients[l]);
+                        g_clients_info.push_back(get_clients_info->clients[l]);
                     }
                 }
                 break;
             case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES:
                 {
-                    st_ctrl_get_services get_services_info = st_ctrl_get_services_init_zero;
-                    status = pb_decode(&stream, st_ctrl_get_services_fields, &get_services_info);
-                    if (!status)
-                    {
-                        LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
-                        break;
-                    }
-
-                    if (get_services_info.more_flag == 0)
+                    st_ctrl_get_services *get_services_info = (st_ctrl_get_services *)pstruct;
+                    if (get_services_info->more_flag == 0)
                     {
                         if (g_services_info.size() == 0)
                         {
@@ -243,37 +290,37 @@ int main()
 
 #if 0
                 // each recv will print
-                LOG_PRINT_INFO("get services info, services_count[%u], more_flag[%u]", get_services_info.services_count, get_services_info.more_flag);
-                for (size_t k = 0; k < get_services_info.services_count; k++)
+                LOG_PRINT_INFO("get services info, services_count[%u], more_flag[%u]", get_services_info->services_count, get_services_info->more_flag);
+                for (size_t k = 0; k < get_services_info->services_count; k++)
                 {
-                    if (get_services_info.services[k].has_service)
+                    if (get_services_info->services[k].has_service)
                     {
                         LOG_PRINT_INFO("service_id[%u], service_type[%u], service_status[%u], listener_clients_count[%u]",
-                                       get_services_info.services[k].service.service_id,
-                                       get_services_info.services[k].service.service_type,
-                                       get_services_info.services[k].service.service_status,
-                                       get_services_info.services[k].listener_clients_count);
-                        if (get_services_info.services[k].has_provide_client)
+                                       get_services_info->services[k].service.service_id,
+                                       get_services_info->services[k].service.service_type,
+                                       get_services_info->services[k].service.service_status,
+                                       get_services_info->services[k].listener_clients_count);
+                        if (get_services_info->services[k].has_provide_client)
                         {
                             LOG_PRINT_INFO("provide_client_id[%u], provide_client_pid[%u], provide_client_name[%s], provide_client_status[%u]",
-                                           get_services_info.services[k].provide_client.client_id,
-                                           get_services_info.services[k].provide_client.client_pid,
-                                           get_services_info.services[k].provide_client.client_name,
-                                           get_services_info.services[k].provide_client.client_status);
+                                           get_services_info->services[k].provide_client.client_id,
+                                           get_services_info->services[k].provide_client.client_pid,
+                                           get_services_info->services[k].provide_client.client_name,
+                                           get_services_info->services[k].provide_client.client_status);
                         }
                         else
                         {
                             LOG_PRINT_INFO("no provide_client");
                         }
-                        if (get_services_info.services[k].listener_clients_count > 0)
+                        if (get_services_info->services[k].listener_clients_count > 0)
                         {
-                            for (size_t j = 0; j < get_services_info.services[k].listener_clients_count; j++)
+                            for (size_t j = 0; j < get_services_info->services[k].listener_clients_count; j++)
                             {
                                 LOG_PRINT_INFO("listener_client_id[%u], listener_client_pid[%u], listener_client_name[%s], listener_client_status[%u]",
-                                               get_services_info.services[k].listener_clients[j].client_id,
-                                               get_services_info.services[k].listener_clients[j].client_pid,
-                                               get_services_info.services[k].listener_clients[j].client_name,
-                                               get_services_info.services[k].listener_clients[j].client_status);
+                                               get_services_info->services[k].listener_clients[j].client_id,
+                                               get_services_info->services[k].listener_clients[j].client_pid,
+                                               get_services_info->services[k].listener_clients[j].client_name,
+                                               get_services_info->services[k].listener_clients[j].client_status);
                             }
                         }
                     }
@@ -284,9 +331,9 @@ int main()
                 }
 #endif
 
-                    for (size_t l = 0; l < get_services_info.services_count; l++)
+                    for (size_t l = 0; l < get_services_info->services_count; l++)
                     {
-                        g_services_info.push_back(get_services_info.services[l]);
+                        g_services_info.push_back(get_services_info->services[l]);
                     }
                 }
                 break;

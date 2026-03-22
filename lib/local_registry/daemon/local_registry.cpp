@@ -1,7 +1,5 @@
 #include "local_registry.hpp"
-#if NANOPB_SUPPORT_OPTION
 #include "generator_autolib.h"
-#endif
 
 SINGLETON_IMPL(LocalRegistry);
 

@@ -3,9 +3,7 @@
 #include "ipc_hv_soa.h"
 #include "local_registry_common.hpp"
 
-#if NANOPB_SUPPORT_OPTION
 #include "generator_autolib.h"
-#endif
 
 struct ipc_hv_soa_process_client_data
 {

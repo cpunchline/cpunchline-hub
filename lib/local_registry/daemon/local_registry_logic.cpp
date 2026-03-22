@@ -1,7 +1,5 @@
 #include "local_registry.hpp"
-#if NANOPB_SUPPORT_OPTION
 #include "generator_autolib.h"
-#endif
 
 void LocalRegistry::onConnection(const hv::SocketChannelPtr &channel)
 {
@@ -46,7 +44,7 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
 
     uint32_t real_readbytes = (uint32_t)((uint32_t)inbuf->size() - LOCAL_REGISTRY_MSG_HEADER_SIZE);
     st_local_msg_header *recv_msg_header = (st_local_msg_header *)inbuf->data();
-    LOG_PRINT_DEBUG("onMessage service_id[%u], msg_type[%u], msg_seqid[%d], msg_len[%u]",
+    LOG_PRINT_DEBUG("onMessage service_id[%u], msg_type[%u], msg_seqid[%u], msg_len[%u]",
                     recv_msg_header->service_id,
                     recv_msg_header->msg_type,
                     recv_msg_header->msg_seqid,
@@ -58,7 +56,6 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
     }
 
     uint8_t pstruct[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
-#if NANOPB_SUPPORT_OPTION
     const pb_msgdesc_t *fields = nullptr;
     uint32_t fields_size = 0;
     uint16_t module_id = (uint16_t)(recv_msg_header->service_id >> 16);
@@ -72,7 +69,7 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
     const st_autolib_servicemap_item *pitem = &pmap->items[msg_id - 1];
     if (nullptr == pitem)
     {
-        LOG_PRINT_ERROR("service_id[%u]  not found", recv_msg_header->service_id);
+        LOG_PRINT_ERROR("service_id[%u] not found", recv_msg_header->service_id);
         return;
     }
 
@@ -105,12 +102,10 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
         }
         LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
     }
-#else
-    if (recv_msg_header->msg_len > 0)
+    else
     {
-        memcpy(pstruct, (uint8_t *)inbuf->data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
+        LOG_PRINT_DEBUG("pb_decode service_id[%d] success(no need)");
     }
-#endif
 
     switch (recv_msg_header->service_id)
     {
@@ -162,15 +157,21 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS:
-            LOG_PRINT_DEBUG("ctrl get clients");
-            registry->ctr_get_clients(recv_msg_header, channel);
+            {
+                LOG_PRINT_DEBUG("ctrl get clients");
+                registry->ctr_get_clients(recv_msg_header, channel);
+            }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES:
-            LOG_PRINT_DEBUG("ctrl get services");
-            registry->ctr_get_services(recv_msg_header, channel);
+            {
+                LOG_PRINT_DEBUG("ctrl get services");
+                registry->ctr_get_services(recv_msg_header, channel);
+            }
             break;
         default:
-            LOG_PRINT_ERROR("invalid service_id[%d]", recv_msg_header->service_id);
+            {
+                LOG_PRINT_ERROR("invalid service_id[%d]", recv_msg_header->service_id);
+            }
             break;
     }
 }
@@ -192,6 +193,7 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
 
     LOG_PRINT_DEBUG("send service_id[%d] to channel_id[%u], fd[%d]", service_id, client_channel->id(), client_channel->fd());
     uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+
     pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
     bool status = pb_encode(&stream, fileds, msgdata);
     if (!status)
@@ -1040,7 +1042,8 @@ std::int32_t LocalRegistry::ctr_get_services(st_local_msg_header *recv_msg_heade
         {
             resp.services_count = each_services_count;
             resp.more_flag = ++more_flag;
-            send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
+            send_msg_to_client(client_channel,
+                               LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
                                recv_msg_header->msg_seqid,
                                recv_msg_header->msg_type + 1,
                                &resp,
@@ -1068,7 +1071,8 @@ std::int32_t LocalRegistry::ctr_get_services(st_local_msg_header *recv_msg_heade
     // finish
     resp = st_ctrl_get_services_init_zero;
     resp.more_flag = 0;
-    send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
+    send_msg_to_client(client_channel,
+                       LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
                        recv_msg_header->msg_seqid,
                        recv_msg_header->msg_type + 1,
                        &resp,

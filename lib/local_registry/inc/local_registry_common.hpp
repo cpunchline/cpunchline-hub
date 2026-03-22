@@ -23,16 +23,12 @@
 #include "Singleton.hpp"
 #include "ThreadQueue.hpp"
 
-#ifndef NANOPB_SUPPORT_OPTION
-#define NANOPB_SUPPORT_OPTION (1)
-#endif
-
 #ifndef LOCAL_REGISTRY_MSG_SIZE_MAX
 #define LOCAL_REGISTRY_MSG_SIZE_MAX (8 * 1024) // 8 K
 #endif
 
 const constexpr std::size_t LOCAL_REGISTRY_DAEMON_HV_LOOP_NUM_MAX = 0;
-const constexpr std::size_t LOCAL_REGISTRY_CLIENT_HV_LOOP_NUM_MAX = 4;
+const constexpr std::size_t LOCAL_REGISTRY_CLIENT_HV_LOOP_NUM_MAX = 2;
 const constexpr std::size_t LOCAL_REGISTRY_MSG_HEADER_SIZE = sizeof(st_local_msg_header); // client_id, msg_seqid, msg_type, service_id, msgdata_len
 
 // service_id[4 bytes] = module_id[high 2 bytes] + msg_id[low 2 bytes];

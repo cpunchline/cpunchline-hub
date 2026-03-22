@@ -321,7 +321,6 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
     {
         LOG_PRINT_DEBUG("client[%d] send msg_id[%d] msg_type[%d] msg_seqid[%d] to client[%d]", client_id, service_id, msg_type, msg_seqid, dest->client_id);
 
-#if NANOPB_SUPPORT_OPTION
         const pb_msgdesc_t *fields = nullptr;
         uint16_t module_id = (uint16_t)(service_id >> 16);
         uint16_t msg_id = (uint16_t)(service_id & 0xFFFF);
@@ -380,18 +379,6 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
             }
             LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
         }
-#else
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msg_len);
-        memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
-        memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
-        memcpy(buffer.data() + 3 * sizeof(uint32_t), &service_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 4 * sizeof(uint32_t), &msg_len, sizeof(uint32_t));
-        if (nullptr != msgdata && msg_len > 0)
-        {
-            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msg_len);
-        }
-#endif
 
         std::lock_guard<std::mutex> send_msg_lock(dest->send_msg_mutex);
         ret = hio_write(dest->client_send_io, buffer.data(), buffer.size());
@@ -452,8 +439,6 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         uint64_t key = ((uint64_t)service_id << 32) | (uint64_t)msg_seqid;
 
         uint32_t msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC;
-#if NANOPB_SUPPORT_OPTION
-        (void)msg_len;
         const pb_msgdesc_t *fields = nullptr;
         uint16_t module_id = (uint16_t)(service_id >> 16);
         uint16_t msg_id = (uint16_t)(service_id & 0xFFFF);
@@ -505,18 +490,6 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
             }
             LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
         }
-#else
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msg_len);
-        memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
-        memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
-        memcpy(buffer.data() + 3 * sizeof(uint32_t), &service_id, sizeof(uint32_t));
-        memcpy(buffer.data() + 4 * sizeof(uint32_t), &msg_len, sizeof(uint32_t));
-        if (nullptr != msgdata && msg_len > 0)
-        {
-            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msg_len);
-        }
-#endif
 
         std::unique_lock<std::mutex> send_msg_lock(dest->send_msg_mutex);
         dest->send_msg_map.insert({key, expected_resp_data});

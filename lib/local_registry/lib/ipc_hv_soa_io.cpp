@@ -335,7 +335,6 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
     }
 
     uint8_t pstruct[LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
-#if NANOPB_SUPPORT_OPTION
     const pb_msgdesc_t *fields = nullptr;
     uint32_t fields_size = 0;
     uint16_t module_id = (uint16_t)(recv_msg_header->service_id >> 16);
@@ -382,12 +381,6 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
         }
         LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
     }
-#else
-    if (recv_msg_header->msg_len > 0)
-    {
-        memcpy(pstruct, (uint8_t *)buf + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
-    }
-#endif
 
     if (recv_msg_header->msg_type != E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC)
     {
@@ -399,13 +392,8 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
 
         if (recv_msg_header->msg_len > 0)
         {
-#if NANOPB_SUPPORT_OPTION
             client_data.data_len = fields_size;
             memcpy(client_data.data, pstruct, fields_size);
-#else
-            client_data.data_len = recv_msg_header->msg_len;
-            memcpy(client_data.data, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
-#endif
         }
         else
         {
@@ -416,15 +404,7 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
     }
     else
     {
-#if NANOPB_SUPPORT_OPTION
         ipc_hv_soa_inn_sync_complete(recv_msg_header->service_id, recv_msg_header->msg_seqid, pstruct, recv_msg_header->msg_len);
-#else
-        if (msg_len > 0)
-        {
-            memcpy(pstruct, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, recv_msg_header->msg_len);
-        }
-        ipc_hv_soa_inn_sync_complete(service_id, msg_seqid, pstruct, recv_msg_header->msg_len);
-#endif
     }
 }
 
