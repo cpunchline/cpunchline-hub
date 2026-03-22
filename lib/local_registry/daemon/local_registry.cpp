@@ -40,9 +40,9 @@ LocalRegistry::LocalRegistry()
 
     unpack_setting_t m_unpack_setting;
     m_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
-    m_unpack_setting.package_max_length = DEFAULT_PACKAGE_MAX_LENGTH;
-    m_unpack_setting.body_offset = sizeof(st_local_msg_header);
-    m_unpack_setting.length_field_offset = sizeof(uint32_t);
+    m_unpack_setting.package_max_length = LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
+    m_unpack_setting.body_offset = LOCAL_REGISTRY_MSG_HEADER_SIZE;
+    m_unpack_setting.length_field_offset = LOCAL_REGISTRY_MSG_HEADER_SIZE - sizeof(uint32_t);
     m_unpack_setting.length_field_bytes = sizeof(uint32_t);
     m_unpack_setting.length_adjustment = 0;
     m_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
