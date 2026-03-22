@@ -97,7 +97,6 @@ int main()
         else
         {
             LOG_PRINT_DEBUG("disconnected to %s! connfd=%d\n", channel->peeraddr().c_str(), channel->fd());
-            exit(EXIT_FAILURE);
         }
     };
 
