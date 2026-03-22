@@ -801,11 +801,11 @@ int32_t ipc_hv_soa_event_trigger(uint32_t service_id, void *event_data, uint32_t
         uint32_t msg_seqid = listener.second->send_msg_seqid++;
         if (nullptr == event_data || 0 == event_data_len)
         {
-            ret = send_msg_to_process(listener.second, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT, service_id, 0, nullptr);
+            ret = send_msg_to_process(listener.second, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY, service_id, 0, nullptr);
         }
         else
         {
-            ret = send_msg_to_process(listener.second, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT, service_id, event_data_len, event_data);
+            ret = send_msg_to_process(listener.second, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY, service_id, event_data_len, event_data);
         }
 
         if (IPC_HV_SOA_RET_SUCCESS != ret)

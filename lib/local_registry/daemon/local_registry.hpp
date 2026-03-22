@@ -53,10 +53,12 @@ private:
     std::int32_t ctr_get_clients(const hv::SocketChannelPtr &client_channel);
     std::int32_t ctr_get_services(const hv::SocketChannelPtr &client_channel);
 
+private:
     // global map
     // one loop so no need lock;
     std::unordered_map<std::string, std::shared_ptr<local_client>> m_clients_by_name; // 客户端列表(process name)
     std::unordered_map<uint32_t, std::shared_ptr<local_service_item>> m_services;     // 服务列表
     std::uint32_t m_next_client_id{1};                                                // auto-inc; no need atomic;
+    std::uint32_t m_msg_seqid{1};                                                     // auto-inc; no need atomic;
     hv::UdsServer m_server;
 };

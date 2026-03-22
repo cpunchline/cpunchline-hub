@@ -67,6 +67,9 @@
     ],
     "StructDef": {
         "st_local_msg_header": {
+            "client_id": "uint32",
+            "msg_seqid": "uint32",
+            "msg_type": "uint32",
             "msg_id": "uint32",
             "msg_len": "uint32"
         },
@@ -195,6 +198,16 @@
         }
     },
     "EnumDef": {
+        "LOCAL_MSG_TYPE": {
+            "UNSUPPORTED": 0,
+            "METHOD_NOTIFY": 1,
+            "METHOD_REQUEST_SYNC": 2,
+            "METHOD_RESPONSE_SYNC": 3,
+            "METHOD_REQUEST_ASYNC": 4,
+            "METHOD_RESPONSE_ASYNC": 5,
+            "EVENT_NOTIFY": 6,
+            "MAX": 7
+        },
         "LOCAL_SERVICE_TYPE": {
             "UNKNOWN": 0,
             "METHOD": 1,

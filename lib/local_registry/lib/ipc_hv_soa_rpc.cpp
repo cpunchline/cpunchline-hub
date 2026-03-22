@@ -702,7 +702,7 @@ void process_msg_handler(void)
                     }
                 }
                 break;
-            case E_IPC_HV_SOA_MSG_TYPE_EVENT:
+            case E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY:
                 {
                     auto it = find_service(recv_data.service_id);
                     if (it == nullptr)
@@ -748,11 +748,11 @@ int32_t ipc_hv_soa_inn_trigger_to_client(std::shared_ptr<ipc_hv_soa_service> ser
     uint32_t msg_seqid = service->service_provider->send_msg_seqid++;
     if (nullptr == event_data || 0 == event_data_len)
     {
-        ret = send_msg_to_process(client, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT, service->service_id, 0, nullptr);
+        ret = send_msg_to_process(client, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY, service->service_id, 0, nullptr);
     }
     else
     {
-        ret = send_msg_to_process(client, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT, service->service_id, event_data_len, event_data);
+        ret = send_msg_to_process(client, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY, service->service_id, event_data_len, event_data);
     }
 
     if (IPC_HV_SOA_RET_SUCCESS != ret)
