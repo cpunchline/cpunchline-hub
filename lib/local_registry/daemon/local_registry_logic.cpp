@@ -117,13 +117,13 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT:
             {
                 st_register_client_req *req = (st_register_client_req *)pstruct;
-                registry->register_client(req, channel);
+                registry->register_client(recv_msg_header, req, channel);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_CLIENT:
             {
                 st_get_client_req *req = (st_get_client_req *)pstruct;
-                registry->get_client(req, channel);
+                registry->get_client(recv_msg_header, req, channel);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_SERVICE:
@@ -152,7 +152,7 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
                 {
                     LOG_PRINT_DEBUG("get service req service_id[%u]", req->service_id);
                 }
-                registry->get_service(req);
+                registry->get_service(recv_msg_header, req);
             }
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_SET_STATUS:
@@ -163,11 +163,11 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS:
             LOG_PRINT_DEBUG("ctrl get clients");
-            registry->ctr_get_clients(channel);
+            registry->ctr_get_clients(recv_msg_header, channel);
             break;
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES:
             LOG_PRINT_DEBUG("ctrl get services");
-            registry->ctr_get_services(channel);
+            registry->ctr_get_services(recv_msg_header, channel);
             break;
         default:
             LOG_PRINT_ERROR("invalid service_id[%d]", recv_msg_header->service_id);
@@ -180,7 +180,7 @@ void LocalRegistry::onWriteComplete(const hv::SocketChannelPtr &channel, hv::Buf
     LOG_PRINT_DEBUG("onWriteComplete len[%zu] to channel_id[%u], fd[%d]", inbuf->size(), channel->id(), channel->fd());
 }
 
-std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size)
+std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t service_id, uint32_t msg_seqid, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size)
 {
     std::int32_t ret = 0;
 
@@ -190,21 +190,24 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
         return -1;
     }
 
-    LOG_PRINT_DEBUG("send msg_id[%d] to channel_id[%u], fd[%d]", msg_id, client_channel->id(), client_channel->fd());
+    LOG_PRINT_DEBUG("send service_id[%d] to channel_id[%u], fd[%d]", service_id, client_channel->id(), client_channel->fd());
     uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
     pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
     bool status = pb_encode(&stream, fileds, msgdata);
     if (!status)
     {
-        LOG_PRINT_ERROR("pb_encode msg_id[%d] fail, error(%s)", msg_id, PB_GET_ERROR(&stream));
+        LOG_PRINT_ERROR("pb_encode service_id[%d] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
         ret = -1;
     }
     else
     {
         st_local_msg_header send_msg_header = {};
-        send_msg_header.service_id = msg_id;
+        send_msg_header.client_id = MODULE_ID_AUTOLIB_LOCAL_REGISTRY;
+        send_msg_header.msg_seqid = msg_seqid;
+        send_msg_header.msg_type = msg_type;
+        send_msg_header.service_id = service_id;
         send_msg_header.msg_len = (uint32_t)stream.bytes_written;
-        memcpy(buffer, &send_msg_header, sizeof(send_msg_header));
+        memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
         ret = client_channel->write(buffer, (int)(LOCAL_REGISTRY_MSG_HEADER_SIZE + stream.bytes_written));
         if (ret < 0)
         {
@@ -312,7 +315,13 @@ std::int32_t LocalRegistry::remove_client(const hv::SocketChannelPtr &client_cha
                 change_msg.has_provider_client = false; // client is offline, so no provider_client
                 if (pair2.second->client_status == LOCAL_CLIENT_STATUS_ONLINE)
                 {
-                    send_msg_to_client(m_server.getChannelById(pair2.second->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_CHANGE_STATUS, &change_msg, st_service_change_status_fields, st_service_change_status_size);
+                    send_msg_to_client(m_server.getChannelById(pair2.second->client_channel_id),
+                                       LOCAL_REGISTRY_SERVICE_ID_EVENT_SERVICE_CHANGE_STATUS,
+                                       m_msg_seqid++,
+                                       LOCAL_MSG_TYPE_EVENT_NOTIFY,
+                                       &change_msg,
+                                       st_service_change_status_fields,
+                                       st_service_change_status_size);
                 }
             }
             pair1.second->service_status = LOCAL_SERVICE_STATUS_DEFAULT;
@@ -329,7 +338,7 @@ std::int32_t LocalRegistry::remove_client(const hv::SocketChannelPtr &client_cha
     return 0;
 }
 
-std::int32_t LocalRegistry::register_client(st_register_client_req *req, const hv::SocketChannelPtr &client_channel)
+std::int32_t LocalRegistry::register_client(st_local_msg_header *recv_msg_header, st_register_client_req *req, const hv::SocketChannelPtr &client_channel)
 {
     LOG_PRINT_INFO("register client_pid[%d], client_name[%s]", req->client_pid, req->client_name);
 
@@ -352,12 +361,16 @@ std::int32_t LocalRegistry::register_client(st_register_client_req *req, const h
     resp.client_pid = (client == nullptr) ? 0 : client->client_pid;
     resp.client_id = (client == nullptr) ? 0 : client->client_id;
     LOG_PRINT_DEBUG("register client id resp client_pid[%u], client_id[%u]", client->client_pid, client->client_id);
-    send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT, &resp, st_register_client_resp_fields, st_register_client_resp_size);
+    send_msg_to_client(client_channel,
+                       LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT,
+                       recv_msg_header->msg_seqid,
+                       recv_msg_header->msg_type + 1,
+                       &resp, st_register_client_resp_fields, st_register_client_resp_size);
 
     return 0;
 }
 
-std::int32_t LocalRegistry::get_client(st_get_client_req *req, const hv::SocketChannelPtr &client_channel)
+std::int32_t LocalRegistry::get_client(st_local_msg_header *recv_msg_header, st_get_client_req *req, const hv::SocketChannelPtr &client_channel)
 {
     LOG_PRINT_DEBUG("get client req client_id[%u]", req->client_id);
     st_get_client_resp resp = st_get_client_resp_init_zero;
@@ -384,7 +397,13 @@ std::int32_t LocalRegistry::get_client(st_get_client_req *req, const hv::SocketC
         std::strncpy(resp.responser_client.client_name, client->client_name.c_str(), sizeof(resp.responser_client.client_name));
         resp.responser_client.client_status = client->client_status;
     }
-    send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_CLIENT, &resp, st_get_client_resp_fields, st_get_client_resp_size);
+    send_msg_to_client(client_channel,
+                       LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_CLIENT,
+                       recv_msg_header->msg_seqid,
+                       recv_msg_header->msg_type + 1,
+                       &resp,
+                       st_get_client_resp_fields,
+                       st_get_client_resp_size);
 
     return 0;
 }
@@ -473,7 +492,13 @@ std::int32_t LocalRegistry::register_service(st_register_service *msg)
 
                 e2c_msg.listener_clients_count = (pb_size_t)count;
                 e2c_msg.reg = true;
-                send_msg_to_client(m_server.getChannelById(it1->second->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTENER_CHANGE_TO_PROVIDER, &e2c_msg, st_listener_change_to_provider_fields, st_listener_change_to_provider_size);
+                send_msg_to_client(m_server.getChannelById(it1->second->client_channel_id),
+                                   LOCAL_REGISTRY_SERVICE_ID_EVENT_LISTENER_CHANGE_TO_PROVIDER,
+                                   m_msg_seqid++,
+                                   LOCAL_MSG_TYPE_EVENT_NOTIFY,
+                                   &e2c_msg,
+                                   st_listener_change_to_provider_fields,
+                                   st_listener_change_to_provider_size);
             }
 
             for (auto &listener : service_item->service_listeners)
@@ -493,7 +518,13 @@ std::int32_t LocalRegistry::register_service(st_register_service *msg)
                     change_msg.provider_client.client_status = it1->second->client_status;
                     if (listener.second->client_status == LOCAL_CLIENT_STATUS_ONLINE)
                     {
-                        send_msg_to_client(m_server.getChannelById(listener.second->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_CHANGE_STATUS, &change_msg, st_service_change_status_fields, st_service_change_status_size);
+                        send_msg_to_client(m_server.getChannelById(listener.second->client_channel_id),
+                                           LOCAL_REGISTRY_SERVICE_ID_EVENT_SERVICE_CHANGE_STATUS,
+                                           m_msg_seqid++,
+                                           LOCAL_MSG_TYPE_EVENT_NOTIFY,
+                                           &change_msg,
+                                           st_service_change_status_fields,
+                                           st_service_change_status_size);
                     }
                 }
                 else
@@ -543,7 +574,13 @@ std::int32_t LocalRegistry::register_service(st_register_service *msg)
                     change_msg.has_provider_client = false;
                     if (listener.second->client_status == LOCAL_CLIENT_STATUS_ONLINE)
                     {
-                        send_msg_to_client(m_server.getChannelById(listener.second->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_CHANGE_STATUS, &change_msg, st_service_change_status_fields, st_service_change_status_size);
+                        send_msg_to_client(m_server.getChannelById(listener.second->client_channel_id),
+                                           LOCAL_REGISTRY_SERVICE_ID_EVENT_SERVICE_CHANGE_STATUS,
+                                           m_msg_seqid++,
+                                           LOCAL_MSG_TYPE_EVENT_NOTIFY,
+                                           &change_msg,
+                                           st_service_change_status_fields,
+                                           st_service_change_status_size);
                     }
                 }
                 else
@@ -648,7 +685,13 @@ std::int32_t LocalRegistry::listen_service(st_listen_service *msg)
                 }
                 if (it1->second->client_status == LOCAL_CLIENT_STATUS_ONLINE)
                 {
-                    send_msg_to_client(m_server.getChannelById(it1->second->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_CHANGE_STATUS, &change_msg, st_service_change_status_fields, st_service_change_status_size);
+                    send_msg_to_client(m_server.getChannelById(it1->second->client_channel_id),
+                                       LOCAL_REGISTRY_SERVICE_ID_EVENT_SERVICE_CHANGE_STATUS,
+                                       m_msg_seqid++,
+                                       LOCAL_MSG_TYPE_EVENT_NOTIFY,
+                                       &change_msg,
+                                       st_service_change_status_fields,
+                                       st_service_change_status_size);
                 }
             }
             else
@@ -680,7 +723,13 @@ std::int32_t LocalRegistry::listen_service(st_listen_service *msg)
             LOG_PRINT_INFO("service_id[%d] add listener[%s]", service_item->service_id, it1->second->client_name.c_str());
             if (service_item->service_provider->client_status == LOCAL_CLIENT_STATUS_ONLINE)
             {
-                send_msg_to_client(m_server.getChannelById(service_item->service_provider->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTENER_CHANGE_TO_PROVIDER, &e2c_msg, st_listener_change_to_provider_fields, st_listener_change_to_provider_size);
+                send_msg_to_client(m_server.getChannelById(service_item->service_provider->client_channel_id),
+                                   LOCAL_REGISTRY_SERVICE_ID_EVENT_LISTENER_CHANGE_TO_PROVIDER,
+                                   m_msg_seqid++,
+                                   LOCAL_MSG_TYPE_EVENT_NOTIFY,
+                                   &e2c_msg,
+                                   st_listener_change_to_provider_fields,
+                                   st_listener_change_to_provider_size);
             }
         }
     }
@@ -688,7 +737,7 @@ std::int32_t LocalRegistry::listen_service(st_listen_service *msg)
     return 0;
 }
 
-std::int32_t LocalRegistry::get_service(st_get_service_req *req)
+std::int32_t LocalRegistry::get_service(st_local_msg_header *recv_msg_header, st_get_service_req *req)
 {
     st_get_service_resp resp = st_get_service_resp_init_zero;
 
@@ -739,7 +788,13 @@ std::int32_t LocalRegistry::get_service(st_get_service_req *req)
                     resp.service.service_id, resp.service.service_type, resp.service.service_status);
     if (it1->second->client_status == LOCAL_CLIENT_STATUS_ONLINE)
     {
-        send_msg_to_client(m_server.getChannelById(it1->second->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_SERVICE, &resp, st_get_service_resp_fields, st_get_service_resp_size);
+        send_msg_to_client(m_server.getChannelById(it1->second->client_channel_id),
+                           LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_SERVICE,
+                           recv_msg_header->msg_seqid,
+                           recv_msg_header->msg_type + 1,
+                           &resp,
+                           st_get_service_resp_fields,
+                           st_get_service_resp_size);
     }
 
     return 0;
@@ -817,7 +872,13 @@ std::int32_t LocalRegistry::service_set_status(st_service_set_status *msg)
                     {
                         if (listener.second->client_status == LOCAL_CLIENT_STATUS_ONLINE)
                         {
-                            send_msg_to_client(m_server.getChannelById(listener.second->client_channel_id), LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_CHANGE_STATUS, &change_msg, st_service_change_status_fields, st_service_change_status_size);
+                            send_msg_to_client(m_server.getChannelById(listener.second->client_channel_id),
+                                               LOCAL_REGISTRY_SERVICE_ID_EVENT_SERVICE_CHANGE_STATUS,
+                                               m_msg_seqid++,
+                                               LOCAL_MSG_TYPE_EVENT_NOTIFY,
+                                               &change_msg,
+                                               st_service_change_status_fields,
+                                               st_service_change_status_size);
                         }
                     }
                 }
@@ -828,7 +889,7 @@ std::int32_t LocalRegistry::service_set_status(st_service_set_status *msg)
     return 0;
 }
 
-std::int32_t LocalRegistry::ctr_get_clients(const hv::SocketChannelPtr &client_channel)
+std::int32_t LocalRegistry::ctr_get_clients(st_local_msg_header *recv_msg_header, const hv::SocketChannelPtr &client_channel)
 {
     st_ctrl_get_clients resp = st_ctrl_get_clients_init_zero;
     constexpr uint32_t each_clients_count = ARRAY_SIZE(resp.clients);
@@ -860,7 +921,13 @@ std::int32_t LocalRegistry::ctr_get_clients(const hv::SocketChannelPtr &client_c
         {
             resp.clients_count = (pb_size_t)i;
             resp.more_flag = ++more_flag;
-            send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS, &resp, st_ctrl_get_clients_fields, st_ctrl_get_clients_size);
+            send_msg_to_client(client_channel,
+                               LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS,
+                               recv_msg_header->msg_seqid,
+                               recv_msg_header->msg_type + 1,
+                               &resp,
+                               st_ctrl_get_clients_fields,
+                               st_ctrl_get_clients_size);
             resp = st_ctrl_get_clients_init_zero;
             i = 0;
             continue;
@@ -870,7 +937,13 @@ std::int32_t LocalRegistry::ctr_get_clients(const hv::SocketChannelPtr &client_c
         {
             resp.clients_count = each_clients_count;
             resp.more_flag = ++more_flag;
-            send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS, &resp, st_ctrl_get_clients_fields, st_ctrl_get_clients_size);
+            send_msg_to_client(client_channel,
+                               LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS,
+                               recv_msg_header->msg_seqid,
+                               recv_msg_header->msg_type + 1,
+                               &resp,
+                               st_ctrl_get_clients_fields,
+                               st_ctrl_get_clients_size);
             resp = st_ctrl_get_clients_init_zero;
             i = 0;
             continue;
@@ -881,18 +954,30 @@ std::int32_t LocalRegistry::ctr_get_clients(const hv::SocketChannelPtr &client_c
     {
         resp.clients_count = (pb_size_t)i;
         resp.more_flag = ++more_flag;
-        send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS, &resp, st_ctrl_get_clients_fields, st_ctrl_get_clients_size);
+        send_msg_to_client(client_channel,
+                           LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS,
+                           recv_msg_header->msg_seqid,
+                           recv_msg_header->msg_type + 1,
+                           &resp,
+                           st_ctrl_get_clients_fields,
+                           st_ctrl_get_clients_size);
     }
 
     // finish
     resp = st_ctrl_get_clients_init_zero;
     resp.more_flag = 0;
-    send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS, &resp, st_ctrl_get_clients_fields, st_ctrl_get_clients_size);
+    send_msg_to_client(client_channel,
+                       LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS,
+                       recv_msg_header->msg_seqid,
+                       recv_msg_header->msg_type + 1,
+                       &resp,
+                       st_ctrl_get_clients_fields,
+                       st_ctrl_get_clients_size);
 
     return 0;
 }
 
-std::int32_t LocalRegistry::ctr_get_services(const hv::SocketChannelPtr &client_channel)
+std::int32_t LocalRegistry::ctr_get_services(st_local_msg_header *recv_msg_header, const hv::SocketChannelPtr &client_channel)
 {
     st_ctrl_get_services resp = st_ctrl_get_services_init_zero;
     constexpr uint32_t each_services_count = ARRAY_SIZE(resp.services);
@@ -937,7 +1022,13 @@ std::int32_t LocalRegistry::ctr_get_services(const hv::SocketChannelPtr &client_
         {
             resp.services_count = (pb_size_t)i;
             resp.more_flag = ++more_flag;
-            send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES, &resp, st_ctrl_get_services_fields, st_ctrl_get_services_size);
+            send_msg_to_client(client_channel,
+                               LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
+                               recv_msg_header->msg_seqid,
+                               recv_msg_header->msg_type + 1,
+                               &resp,
+                               st_ctrl_get_services_fields,
+                               st_ctrl_get_services_size);
             resp = st_ctrl_get_services_init_zero;
             i = 0;
             continue;
@@ -947,7 +1038,12 @@ std::int32_t LocalRegistry::ctr_get_services(const hv::SocketChannelPtr &client_
         {
             resp.services_count = each_services_count;
             resp.more_flag = ++more_flag;
-            send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES, &resp, st_ctrl_get_services_fields, st_ctrl_get_services_size);
+            send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
+                               recv_msg_header->msg_seqid,
+                               recv_msg_header->msg_type + 1,
+                               &resp,
+                               st_ctrl_get_services_fields,
+                               st_ctrl_get_services_size);
             resp = st_ctrl_get_services_init_zero;
             i = 0;
             continue;
@@ -958,12 +1054,23 @@ std::int32_t LocalRegistry::ctr_get_services(const hv::SocketChannelPtr &client_
     {
         resp.services_count = (pb_size_t)i;
         resp.more_flag = ++more_flag;
-        send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES, &resp, st_ctrl_get_services_fields, st_ctrl_get_services_size);
+        send_msg_to_client(client_channel,
+                           LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
+                           recv_msg_header->msg_seqid,
+                           recv_msg_header->msg_type + 1,
+                           &resp,
+                           st_ctrl_get_services_fields,
+                           st_ctrl_get_services_size);
     }
 
     // finish
     resp = st_ctrl_get_services_init_zero;
     resp.more_flag = 0;
-    send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES, &resp, st_ctrl_get_services_fields, st_ctrl_get_services_size);
+    send_msg_to_client(client_channel, LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES,
+                       recv_msg_header->msg_seqid,
+                       recv_msg_header->msg_type + 1,
+                       &resp,
+                       st_ctrl_get_services_fields,
+                       st_ctrl_get_services_size);
     return 0;
 }

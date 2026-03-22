@@ -40,18 +40,18 @@ private:
     static void onConnection(const hv::SocketChannelPtr &channel);
     static void onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *inbuf);
     static void onWriteComplete(const hv::SocketChannelPtr &channel, hv::Buffer *inbuf);
-    std::int32_t send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size);
+    std::int32_t send_msg_to_client(const hv::SocketChannelPtr &client_channel, uint32_t service_id, uint32_t msg_seqid, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size);
 
     std::int32_t add_client(const hv::SocketChannelPtr &client_channel);
     std::int32_t remove_client(const hv::SocketChannelPtr &client_channel);
-    std::int32_t register_client(st_register_client_req *req, const hv::SocketChannelPtr &client_channel);
-    std::int32_t get_client(st_get_client_req *req, const hv::SocketChannelPtr &client_channel);
+    std::int32_t register_client(st_local_msg_header *recv_msg_header, st_register_client_req *req, const hv::SocketChannelPtr &client_channel);
+    std::int32_t get_client(st_local_msg_header *recv_msg_header, st_get_client_req *req, const hv::SocketChannelPtr &client_channel);
     std::int32_t register_service(st_register_service *msg);
     std::int32_t listen_service(st_listen_service *msg);
-    std::int32_t get_service(st_get_service_req *req);
+    std::int32_t get_service(st_local_msg_header *recv_msg_header, st_get_service_req *req);
     std::int32_t service_set_status(st_service_set_status *msg);
-    std::int32_t ctr_get_clients(const hv::SocketChannelPtr &client_channel);
-    std::int32_t ctr_get_services(const hv::SocketChannelPtr &client_channel);
+    std::int32_t ctr_get_clients(st_local_msg_header *recv_msg_header, const hv::SocketChannelPtr &client_channel);
+    std::int32_t ctr_get_services(st_local_msg_header *recv_msg_header, const hv::SocketChannelPtr &client_channel);
 
 private:
     // global map

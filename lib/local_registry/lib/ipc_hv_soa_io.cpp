@@ -166,7 +166,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 }
             }
             break;
-        case LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_CHANGE_STATUS:
+        case LOCAL_REGISTRY_SERVICE_ID_EVENT_SERVICE_CHANGE_STATUS:
             {
                 resp_size = sizeof(st_service_change_status);
                 *(st_service_change_status *)resp = st_service_change_status_init_zero;
@@ -224,7 +224,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
             }
             return;
             // break;
-        case LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTENER_CHANGE_TO_PROVIDER:
+        case LOCAL_REGISTRY_SERVICE_ID_EVENT_LISTENER_CHANGE_TO_PROVIDER:
             {
                 resp_size = sizeof(st_listener_change_to_provider);
                 *(st_listener_change_to_provider *)resp = st_listener_change_to_provider_init_zero;

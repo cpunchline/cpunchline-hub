@@ -41,13 +41,13 @@
             "out": null
         },
         {
-            "type": "METHOD",
+            "type": "EVENT",
             "name": "SERVICE_CHANGE_STATUS",
             "in": "st_service_change_status",
             "out": null
         },
         {
-            "type": "METHOD",
+            "type": "EVENT",
             "name": "LISTENER_CHANGE_TO_PROVIDER",
             "in": "st_listener_change_to_provider",
             "out": null
@@ -55,14 +55,14 @@
         {
             "type": "METHOD",
             "name": "CTRL_GET_CLIENTS",
-            "in": "st_ctrl_get_clients",
-            "out": null
+            "in": null,
+            "out": "st_ctrl_get_clients"
         },
         {
             "type": "METHOD",
             "name": "CTRL_GET_SERVICES",
-            "in": "st_ctrl_get_services",
-            "out": null
+            "in": null,
+            "out": "st_ctrl_get_services"
         }
     ],
     "StructDef": {
