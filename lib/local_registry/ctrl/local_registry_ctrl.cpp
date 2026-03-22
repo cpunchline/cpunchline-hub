@@ -80,21 +80,19 @@ int main()
             send_msg_header.service_id = LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_CLIENTS;
             send_msg_header.msg_len = 0;
             memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE); // no data, so need encode
-            channel->write(buffer, sizeof(buffer));
+            channel->write(buffer, (int)(LOCAL_REGISTRY_MSG_HEADER_SIZE + send_msg_header.msg_len));
 
             // get services
-            uint8_t buffer1[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
-            st_local_msg_header send_msg_header1 = {};
             LOG_PRINT_INFO("get services req to daemon");
-            memset(&send_msg_header1, 0, LOCAL_REGISTRY_MSG_HEADER_SIZE);
-            memset(buffer1, 0, sizeof(buffer1));
-            send_msg_header1.client_id = UINT32_MAX - 1;
-            send_msg_header1.msg_seqid = 2;
-            send_msg_header1.msg_type = LOCAL_MSG_TYPE_METHOD_REQUEST_ASYNC;
-            send_msg_header1.service_id = LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES;
-            send_msg_header1.msg_len = 0;
-            memcpy(buffer1, &send_msg_header1, LOCAL_REGISTRY_MSG_HEADER_SIZE); // no data, so need encode
-            channel->write(buffer1, sizeof(buffer1));
+            memset(&send_msg_header, 0, LOCAL_REGISTRY_MSG_HEADER_SIZE);
+            memset(buffer, 0, sizeof(buffer));
+            send_msg_header.client_id = UINT32_MAX - 1;
+            send_msg_header.msg_seqid = 2;
+            send_msg_header.msg_type = LOCAL_MSG_TYPE_METHOD_REQUEST_ASYNC;
+            send_msg_header.service_id = LOCAL_REGISTRY_SERVICE_ID_METHOD_CTRL_GET_SERVICES;
+            send_msg_header.msg_len = 0;
+            memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE); // no data, so need encode
+            channel->write(buffer, (int)(LOCAL_REGISTRY_MSG_HEADER_SIZE + send_msg_header.msg_len));
         }
         else
         {
