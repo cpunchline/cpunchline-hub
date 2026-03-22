@@ -103,19 +103,13 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
     uint8_t *buffer = (uint8_t *)buf + LOCAL_REGISTRY_MSG_HEADER_SIZE;
     pb_istream_t stream = pb_istream_from_buffer(buffer, recv_msg_header->msg_len);
 
-#if NANOPB_SUPPORT_OPTION
     uint16_t module_id = (uint16_t)(recv_msg_header->msg_id >> 16);
     if (module_id != MODULE_ID_AUTOLIB_LOCAL_REGISTRY)
     {
         LOG_PRINT_ERROR("module_id[%u] != [%u]", module_id, MODULE_ID_AUTOLIB_LOCAL_REGISTRY);
         return;
     }
-    uint16_t msg_id = (uint16_t)(recv_msg_header->msg_id & 0xFFFF);
-    switch (msg_id)
-#else
     switch (recv_msg_header->msg_id)
-#endif
-
     {
         case LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT:
             {
