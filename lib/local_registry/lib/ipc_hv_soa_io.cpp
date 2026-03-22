@@ -322,13 +322,13 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
 {
     uint8_t *buffer = (uint8_t *)buf;
     LOG_PRINT_DEBUG("on_recv_process fd[%d], readbytes[%d]", hio_fd(io), readbytes);
-    if (readbytes < (int)LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE)
+    if (readbytes < (int)LOCAL_REGISTRY_MSG_HEADER_SIZE)
     {
         LOG_PRINT_ERROR("not a complete msg");
         return;
     }
 
-    uint32_t real_readbytes = (uint32_t)((uint32_t)readbytes - LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE);
+    uint32_t real_readbytes = (uint32_t)((uint32_t)readbytes - LOCAL_REGISTRY_MSG_HEADER_SIZE);
     uint32_t client_id, msg_seqid, msg_type, service_id, msgdata_len;
     memcpy(&client_id, buffer + 0 * sizeof(uint32_t), sizeof(uint32_t));
     memcpy(&msg_seqid, buffer + 1 * sizeof(uint32_t), sizeof(uint32_t));
@@ -382,7 +382,7 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
             return;
         }
 
-        pb_istream_t stream = pb_istream_from_buffer(buffer + LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE, msgdata_len);
+        pb_istream_t stream = pb_istream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata_len);
         bool status = pb_decode(&stream, fields, pstruct);
         if (!status)
         {
@@ -408,7 +408,7 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
             memcpy(client_data.data, pstruct, fields_size);
 #else
             client_data.data_len = msgdata_len;
-            memcpy(client_data.data, buffer + LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE, msgdata_len);
+            memcpy(client_data.data, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata_len);
 #endif
         }
         else
@@ -426,7 +426,7 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
         if (msgdata_len > 0)
         {
             memset(pstruct, 0x00, msgdata_len);
-            memcpy(pstruct, buffer + LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE, msgdata_len);
+            memcpy(pstruct, buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata_len);
         }
         ipc_hv_soa_inn_sync_complete(service_id, msg_seqid, pstruct, msgdata_len);
 #endif
@@ -445,12 +445,12 @@ void on_write(hio_t *io, const void *buf, int writebytes)
     if (nullptr != g_client->m_daemon_io && hio_id(io) == hio_id(g_client->m_daemon_io))
     {
         hio_setcb_read(io, on_recv_daemon);
-        hio_set_unpack(io, &g_client->daemon_unpack_setting);
+        hio_set_unpack(io, &g_client->unpack_setting);
     }
     else
     {
         hio_setcb_read(io, on_recv_process);
-        hio_set_unpack(io, &g_client->process_unpack_setting);
+        hio_set_unpack(io, &g_client->unpack_setting);
     }
 
     hio_read(io);
@@ -510,7 +510,7 @@ void on_post_event_cb(hevent_t *ev)
 
     hio_setcb_close(io, on_close);
     hio_setcb_read(io, on_recv_process);
-    hio_set_unpack(io, &g_client->process_unpack_setting);
+    hio_set_unpack(io, &g_client->unpack_setting);
     hio_read(io);
 }
 

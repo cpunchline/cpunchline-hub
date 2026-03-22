@@ -6,21 +6,13 @@ std::shared_ptr<ipc_hv_soa_client> g_client = nullptr;
 // Helper function to setup unpack settings
 static void setup_unpack_setting(void)
 {
-    g_client->daemon_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
-    g_client->daemon_unpack_setting.package_max_length = (unsigned int)LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
-    g_client->daemon_unpack_setting.body_offset = (unsigned short)LOCAL_REGISTRY_MSG_HEADER_SIZE;
-    g_client->daemon_unpack_setting.length_field_offset = sizeof(uint32_t);
-    g_client->daemon_unpack_setting.length_field_bytes = sizeof(uint32_t);
-    g_client->daemon_unpack_setting.length_adjustment = 0;
-    g_client->daemon_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
-
-    g_client->daemon_unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
-    g_client->daemon_unpack_setting.package_max_length = (unsigned int)LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
-    g_client->daemon_unpack_setting.body_offset = (unsigned short)LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE;
-    g_client->daemon_unpack_setting.length_field_offset = sizeof(uint32_t) * 4;
-    g_client->daemon_unpack_setting.length_field_bytes = sizeof(uint32_t);
-    g_client->daemon_unpack_setting.length_adjustment = 0;
-    g_client->daemon_unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
+    g_client->unpack_setting.mode = UNPACK_BY_LENGTH_FIELD;
+    g_client->unpack_setting.package_max_length = LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX;
+    g_client->unpack_setting.body_offset = LOCAL_REGISTRY_MSG_HEADER_SIZE;
+    g_client->unpack_setting.length_field_offset = LOCAL_REGISTRY_MSG_HEADER_SIZE - sizeof(uint32_t);
+    g_client->unpack_setting.length_field_bytes = sizeof(uint32_t);
+    g_client->unpack_setting.length_adjustment = 0;
+    g_client->unpack_setting.length_field_coding = ENCODE_BY_LITTEL_ENDIAN;
 }
 
 // Helper function to create and run event loop

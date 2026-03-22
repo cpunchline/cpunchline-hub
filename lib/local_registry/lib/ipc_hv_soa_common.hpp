@@ -58,8 +58,7 @@ struct ipc_hv_soa_timer
 struct ipc_hv_soa_client
 {
     // unpack setting
-    unpack_setting_t daemon_unpack_setting;
-    unpack_setting_t process_unpack_setting;
+    unpack_setting_t unpack_setting;
 
     // temp map
     std::mutex process_clients_map_mutex;

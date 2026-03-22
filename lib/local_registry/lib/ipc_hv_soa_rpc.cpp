@@ -362,7 +362,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
             encoded_size = 0;
         }
 
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + encoded_size);
+        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
         memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
         memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
         memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
@@ -371,7 +371,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
 
         if (nullptr != msgdata && encoded_size > 0)
         {
-            pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE, encoded_size);
+            pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, encoded_size);
             bool status = pb_encode(&stream, fields, msgdata);
             if (!status)
             {
@@ -381,7 +381,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
             LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
         }
 #else
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + msgdata_len);
+        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msgdata_len);
         memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
         memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
         memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
@@ -389,7 +389,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
         memcpy(buffer.data() + 4 * sizeof(uint32_t), &msgdata_len, sizeof(uint32_t));
         if (nullptr != msgdata && msgdata_len > 0)
         {
-            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE, msgdata, msgdata_len);
+            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msgdata_len);
         }
 #endif
 
@@ -487,7 +487,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
             encoded_size = 0;
         }
 
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + encoded_size);
+        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
         memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
         memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
         memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
@@ -496,7 +496,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
 
         if (nullptr != msgdata && encoded_size > 0)
         {
-            pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE, encoded_size);
+            pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, encoded_size);
             bool status = pb_encode(&stream, fields, msgdata);
             if (!status)
             {
@@ -506,7 +506,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
             LOG_PRINT_DEBUG("pb_encode service_id[%d] success", service_id);
         }
 #else
-        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE + msgdata_len);
+        std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + msgdata_len);
         memcpy(buffer.data() + 0 * sizeof(uint32_t), &client_id, sizeof(uint32_t));
         memcpy(buffer.data() + 1 * sizeof(uint32_t), &msg_seqid, sizeof(uint32_t));
         memcpy(buffer.data() + 2 * sizeof(uint32_t), &msg_type, sizeof(uint32_t));
@@ -514,7 +514,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         memcpy(buffer.data() + 4 * sizeof(uint32_t), &msgdata_len, sizeof(uint32_t));
         if (nullptr != msgdata && msgdata_len > 0)
         {
-            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_PROCESS_HEADER_SIZE, msgdata, msgdata_len);
+            memcpy(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, msgdata, msgdata_len);
         }
 #endif
 
