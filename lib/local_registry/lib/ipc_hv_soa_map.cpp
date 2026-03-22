@@ -138,6 +138,7 @@ std::shared_ptr<ipc_hv_soa_process_client> get_process_client(uint32_t client_id
 
     int32_t ret = send_msg_to_daemon_sync(
         LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_CLIENT,
+        E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC,
         &req,
         st_get_client_req_fields,
         st_get_client_req_size,
@@ -255,6 +256,7 @@ std::shared_ptr<ipc_hv_soa_service> get_service(uint32_t service_id)
 
     int32_t ret = send_msg_to_daemon_sync(
         LOCAL_REGISTRY_SERVICE_ID_METHOD_GET_SERVICE,
+        E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC,
         &req,
         st_get_service_req_fields,
         st_get_service_req_size,

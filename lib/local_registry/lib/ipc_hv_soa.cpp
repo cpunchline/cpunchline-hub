@@ -329,7 +329,7 @@ int32_t ipc_hv_soa_provider_service_offer(ipc_hv_soa_provider_service_t *provide
     if (g_client->client_status == LOCAL_CLIENT_STATUS_ONLINE)
     {
         std::unique_lock daemon_lock(g_client->daemo_mutex);
-        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_SERVICE, &register_service, st_register_service_fields, st_register_service_size);
+        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_SERVICE, E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY, &register_service, st_register_service_fields, st_register_service_size);
         if (IPC_HV_SOA_RET_SUCCESS != ret)
         {
             LOG_PRINT_ERROR("send_msg_to_daemon fail, ret[%d]!", ret);
@@ -387,7 +387,7 @@ int32_t ipc_hv_soa_provider_service_revoke(uint32_t *provider_services, uint32_t
     if (g_client->client_status == LOCAL_CLIENT_STATUS_ONLINE)
     {
         std::unique_lock daemon_lock(g_client->daemo_mutex);
-        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_SERVICE, &unregister_service, st_register_service_fields, st_register_service_size);
+        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_SERVICE, E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY, &unregister_service, st_register_service_fields, st_register_service_size);
         if (IPC_HV_SOA_RET_SUCCESS != ret)
         {
             LOG_PRINT_ERROR("send_msg_to_daemon fail, ret[%d]!", ret);
@@ -433,7 +433,7 @@ int32_t ipc_hv_soa_provider_service_set_status(uint32_t *provider_services, uint
     if (g_client->client_status == LOCAL_CLIENT_STATUS_ONLINE)
     {
         std::unique_lock daemon_lock(g_client->daemo_mutex);
-        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_SET_STATUS, &set_status, st_service_set_status_fields, st_service_set_status_size);
+        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_SERVICE_SET_STATUS, E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY, &set_status, st_service_set_status_fields, st_service_set_status_size);
         if (IPC_HV_SOA_RET_SUCCESS != ret)
         {
             LOG_PRINT_ERROR("send_msg_to_daemon fail, ret[%d]!", ret);
@@ -503,7 +503,7 @@ int32_t ipc_hv_soa_listener_service_subscribe(ipc_hv_soa_listener_service_t *lis
     if (it->client_status == LOCAL_CLIENT_STATUS_ONLINE)
     {
         std::unique_lock daemon_lock(g_client->daemo_mutex);
-        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTEN_SERVICE, &subscribe_service, st_listen_service_fields, st_listen_service_size);
+        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTEN_SERVICE, E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY, &subscribe_service, st_listen_service_fields, st_listen_service_size);
         if (IPC_HV_SOA_RET_SUCCESS != ret)
         {
             LOG_PRINT_ERROR("send_msg_to_daemon fail, ret[%d]!", ret);
@@ -556,7 +556,7 @@ int32_t ipc_hv_soa_listener_service_unsubscribe(uint32_t *listener_services, uin
     if (g_client->client_status == LOCAL_CLIENT_STATUS_ONLINE)
     {
         std::unique_lock daemon_lock(g_client->daemo_mutex);
-        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTEN_SERVICE, &unsubscribe, st_listen_service_fields, st_listen_service_size);
+        ret = send_msg_to_daemon(LOCAL_REGISTRY_SERVICE_ID_METHOD_LISTEN_SERVICE, E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY, &unsubscribe, st_listen_service_fields, st_listen_service_size);
         if (IPC_HV_SOA_RET_SUCCESS != ret)
         {
             LOG_PRINT_ERROR("send_msg_to_daemon fail, ret[%d]!", ret);

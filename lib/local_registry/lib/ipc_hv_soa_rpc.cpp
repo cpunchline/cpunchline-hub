@@ -4,7 +4,7 @@ extern std::atomic_bool g_init_flag;
 extern std::shared_ptr<ipc_hv_soa_client> g_client;
 
 // Internal helper function to encode and send message to daemon
-static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size)
+static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size)
 {
     int32_t ret = IPC_HV_SOA_RET_SUCCESS;
 
@@ -20,23 +20,46 @@ static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    LOG_PRINT_DEBUG("send msg_id[%d] to daemon fd[%d]", msg_id, hio_fd(g_client->m_daemon_io));
+    LOG_PRINT_DEBUG("send service_id[%d] to daemon fd[%d]", service_id, hio_fd(g_client->m_daemon_io));
 
-    // Encode message
-    std::vector<uint8_t> buffer(LOCAL_REGISTRY_MSG_HEADER_SIZE + field_size, 0);
-    pb_ostream_t stream = pb_ostream_from_buffer(buffer.data() + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
-    bool status = pb_encode(&stream, fields, msgdata);
-    if (!status)
+    size_t encoded_size = 0;
+    if (nullptr != msgdata && field_size > 0)
     {
-        LOG_PRINT_ERROR("pb_encode msg_id[%d] fail, error(%s)", msg_id, PB_GET_ERROR(&stream));
-        return IPC_HV_SOA_RET_ERR_MSG_ENCODE;
+        if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
+        {
+            LOG_PRINT_ERROR("pb_get_encoded_size service_id[%d] fail!", service_id);
+            return -1;
+        }
+    }
+    else
+    {
+        encoded_size = 0;
     }
 
-    // Build message header
+    uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
+    if (nullptr != msgdata && encoded_size > 0)
+    {
+        pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
+        bool status = pb_encode(&stream, fields, msgdata);
+        if (!status)
+        {
+            LOG_PRINT_ERROR("pb_encode service_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
+            return -1;
+        }
+        LOG_PRINT_DEBUG("pb_encode service_id[%u] success", service_id);
+    }
+    else
+    {
+        LOG_PRINT_DEBUG("pb_encode service_id[%u] success(no need)");
+    }
+
     st_local_msg_header send_msg_header = {};
-    send_msg_header.service_id = msg_id;
-    send_msg_header.msg_len = (uint32_t)stream.bytes_written;
-    memcpy(buffer.data(), &send_msg_header, sizeof(send_msg_header));
+    send_msg_header.client_id = MODULE_ID_AUTOLIB_LOCAL_REGISTRY;
+    send_msg_header.msg_seqid = g_client->m_msg_seqid.fetch_add(1);
+    send_msg_header.msg_type = msg_type;
+    send_msg_header.service_id = service_id;
+    send_msg_header.msg_len = (uint32_t)encoded_size;
+    memcpy(buffer, &send_msg_header, sizeof(send_msg_header));
 
     // Check connection and send
     if (!hio_is_opened(g_client->m_daemon_io))
@@ -45,7 +68,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    ret = hio_write(g_client->m_daemon_io, buffer.data(), LOCAL_REGISTRY_MSG_HEADER_SIZE + stream.bytes_written);
+    ret = hio_write(g_client->m_daemon_io, buffer, LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
     if (ret < 0)
     {
         LOG_PRINT_ERROR("hio_write fail, ret[%d], error[%d]", ret, hio_error(g_client->m_daemon_io));
@@ -59,12 +82,12 @@ static int32_t _send_msg_to_daemon_internal(uint32_t msg_id, const void *msgdata
     return ret;
 }
 
-int32_t send_msg_to_daemon(uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size)
+int32_t send_msg_to_daemon(uint32_t service_id, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size)
 {
-    return _send_msg_to_daemon_internal(msg_id, msgdata, fileds, field_size);
+    return _send_msg_to_daemon_internal(service_id, msg_type, msgdata, fileds, field_size);
 }
 
-int32_t send_msg_to_daemon_sync(uint32_t msg_id, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size, void *resp_data, uint32_t *resp_data_len, uint32_t timeout_ms)
+int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size, void *resp_data, uint32_t *resp_data_len, uint32_t timeout_ms)
 {
     if (nullptr == g_client)
     {
@@ -86,7 +109,7 @@ int32_t send_msg_to_daemon_sync(uint32_t msg_id, const void *msgdata, const pb_m
     g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
 
     // Send message using internal helper function
-    int32_t ret = _send_msg_to_daemon_internal(msg_id, msgdata, fields, field_size);
+    int32_t ret = _send_msg_to_daemon_internal(service_id, msg_type, msgdata, fields, field_size);
     if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
         LOG_PRINT_ERROR("_send_msg_to_daemon_internal fail, ret[%d]", ret);
@@ -104,26 +127,26 @@ int32_t send_msg_to_daemon_sync(uint32_t msg_id, const void *msgdata, const pb_m
 
     if (!ready)
     {
-        LOG_PRINT_ERROR("wait response timeout for msg_id[%d], timeout[%u]ms", msg_id, timeout_ms);
+        LOG_PRINT_ERROR("wait response timeout for service_id[%d], timeout[%u]ms", service_id, timeout_ms);
         ret = IPC_HV_SOA_RET_TIMEOUT;
     }
     else if (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_SUCCESS)
     {
-        LOG_PRINT_ERROR("daemon processing failed, daemon_cond_ret[%d], msg_id[%d]",
-                        g_client->daemon_cond_ret, msg_id);
+        LOG_PRINT_ERROR("daemon processing failed, daemon_cond_ret[%d], service_id[%d]",
+                        g_client->daemon_cond_ret, service_id);
         ret = IPC_HV_SOA_RET_FAIL;
     }
-    else if (g_client->daemon_cond_msgid != msg_id)
+    else if (g_client->daemon_cond_msgid != service_id)
     {
-        LOG_PRINT_ERROR("response msg_id mismatch, expected[%d], got[%d]",
-                        msg_id, g_client->daemon_cond_msgid);
+        LOG_PRINT_ERROR("response service_id mismatch, expected[%d], got[%d]",
+                        service_id, g_client->daemon_cond_msgid);
         ret = IPC_HV_SOA_RET_FAIL;
     }
     else
     {
         // Successfully received response
-        LOG_PRINT_DEBUG("received response for msg_id[%d], daemon_cond_ret[%d]",
-                        msg_id, g_client->daemon_cond_ret);
+        LOG_PRINT_DEBUG("received response for service_id[%d], daemon_cond_ret[%d]",
+                        service_id, g_client->daemon_cond_ret);
 
         // Copy response data if caller provided buffer
         if (nullptr != resp_data && nullptr != resp_data_len)
@@ -131,7 +154,7 @@ int32_t send_msg_to_daemon_sync(uint32_t msg_id, const void *msgdata, const pb_m
             // Note: The actual response size depends on the message type.
             // Caller should provide a buffer large enough based on the expected response type.
             // We copy up to the buffer size provided by caller.
-            // In practice, for known msg_id, caller knows the expected response structure.
+            // In practice, for known service_id, caller knows the expected response structure.
 
             // For safety, we limit the copy to LOCAL_REGISTRY_MSG_SIZE_MAX
             uint32_t copy_size = std::min(*resp_data_len, (uint32_t)LOCAL_REGISTRY_MSG_SIZE_MAX);
@@ -319,7 +342,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
 
     if (IPC_HV_SOA_RET_SUCCESS == ret)
     {
-        LOG_PRINT_DEBUG("client[%d] send msg_id[%d] msg_type[%d] msg_seqid[%d] to client[%d]", client_id, service_id, msg_type, msg_seqid, dest->client_id);
+        LOG_PRINT_DEBUG("client[%d] send service_id[%d] msg_type[%d] msg_seqid[%d] to client[%d]", client_id, service_id, msg_type, msg_seqid, dest->client_id);
 
         const pb_msgdesc_t *fields = nullptr;
         uint16_t module_id = (uint16_t)(service_id >> 16);
@@ -352,7 +375,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
         {
             if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
             {
-                LOG_PRINT_ERROR("pb_get_encoded_size msg_id[%d] fail!", service_id);
+                LOG_PRINT_ERROR("pb_get_encoded_size service_id[%d] fail!", service_id);
                 return IPC_HV_SOA_RET_FAIL;
             }
         }
@@ -368,7 +391,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
             bool status = pb_encode(&stream, fields, msgdata);
             if (!status)
             {
-                LOG_PRINT_ERROR("pb_encode msg_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
+                LOG_PRINT_ERROR("pb_encode service_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
                 return IPC_HV_SOA_RET_FAIL;
             }
             LOG_PRINT_DEBUG("pb_encode service_id[%u] success", service_id);
@@ -430,7 +453,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         ipc_hv_soa_process_client_data expected_resp_data = {};
         ipc_hv_soa_process_client_data real_resp_data = {};
 
-        LOG_PRINT_DEBUG("client[%d] send msg_id[%d] msg_type[%d] msg_seqid[%d] to client[%d]", client_id, service_id, E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC, msg_seqid, dest->client_id);
+        LOG_PRINT_DEBUG("client[%d] send service_id[%d] msg_type[%d] msg_seqid[%d] to client[%d]", client_id, service_id, E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC, msg_seqid, dest->client_id);
         expected_resp_data.service_id = service_id;
         expected_resp_data.msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC;
         expected_resp_data.msg_seqid = msg_seqid;
@@ -465,7 +488,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         {
             if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
             {
-                LOG_PRINT_ERROR("pb_get_encoded_size msg_id[%d] fail!", service_id);
+                LOG_PRINT_ERROR("pb_get_encoded_size service_id[%d] fail!", service_id);
                 return IPC_HV_SOA_RET_FAIL;
             }
         }
@@ -481,7 +504,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
             bool status = pb_encode(&stream, fields, msgdata);
             if (!status)
             {
-                LOG_PRINT_ERROR("pb_encode msg_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
+                LOG_PRINT_ERROR("pb_encode service_id[%u] fail, error(%s)", service_id, PB_GET_ERROR(&stream));
                 return IPC_HV_SOA_RET_FAIL;
             }
             LOG_PRINT_DEBUG("pb_encode service_id[%u] success", service_id);
@@ -599,6 +622,7 @@ int32_t register_client_req()
 
     ret = send_msg_to_daemon_sync(
         LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT,
+        E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC,
         &req,
         st_register_client_req_fields,
         st_register_client_req_size,

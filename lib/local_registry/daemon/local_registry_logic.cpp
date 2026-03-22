@@ -208,7 +208,6 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
     }
 
     uint8_t buffer[LOCAL_REGISTRY_MSG_HEADER_SIZE + LOCAL_REGISTRY_MSG_SIZE_MAX] = {};
-
     if (nullptr != msgdata && encoded_size > 0)
     {
         pb_ostream_t stream = pb_ostream_from_buffer(buffer + LOCAL_REGISTRY_MSG_HEADER_SIZE, field_size);
@@ -219,6 +218,10 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
             return -1;
         }
         LOG_PRINT_DEBUG("pb_encode service_id[%u] success", service_id);
+    }
+    else
+    {
+        LOG_PRINT_DEBUG("pb_encode service_id[%u] success(no need)");
     }
 
     st_local_msg_header send_msg_header = {};
