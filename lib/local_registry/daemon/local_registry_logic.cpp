@@ -365,7 +365,9 @@ std::int32_t LocalRegistry::register_client(st_local_msg_header *recv_msg_header
                        LOCAL_REGISTRY_SERVICE_ID_METHOD_REGISTER_CLIENT,
                        recv_msg_header->msg_seqid,
                        recv_msg_header->msg_type + 1,
-                       &resp, st_register_client_resp_fields, st_register_client_resp_size);
+                       &resp,
+                       st_register_client_resp_fields,
+                       st_register_client_resp_size);
 
     return 0;
 }
