@@ -64,7 +64,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_ty
     // Check connection and send
     if (!hio_is_opened(g_client->m_daemon_io))
     {
-        LOG_PRINT_ERROR("hio_write fail, fd[%d] disconnect", hio_fd(g_client->m_daemon_io));
+        LOG_PRINT_ERROR("hio_is_opened fail, fd[%d] disconnect", hio_fd(g_client->m_daemon_io));
         return IPC_HV_SOA_RET_FAIL;
     }
 
