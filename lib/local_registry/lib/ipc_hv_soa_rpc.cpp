@@ -21,7 +21,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_se
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    LOG_PRINT_DEBUG("send service_id[%u] service_seqid[%u] to daemon fd[%d]", service_id, msg_seqid, hio_fd(g_client->m_daemon_io));
+    LOG_PRINT_DEBUG("send service_id[%u] msg_seqid[%u] to daemon fd[%d]", service_id, msg_seqid, hio_fd(g_client->m_daemon_io));
 
     size_t encoded_size = 0;
     if (nullptr != msgdata && field_size > 0)

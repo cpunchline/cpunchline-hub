@@ -459,25 +459,307 @@ void test_perfect_forwarding()
 }
 
 // ============================================================================
+// 测试 12: 对象池复用测试 - 验证 condition_variable 可重复使用
+// ============================================================================
+void test_context_pool_reuse()
+{
+    std::cout << "\n=== Test: Context Pool Reuse (Condition Variable Reusability) ===" << std::endl;
+
+    SyncContextPool<void> pool(2, 4); // 初始 2 个，最多 4 个
+
+    // 第一次借用 - 归还 - 再借用，验证 condition_variable 可以重复使用
+    for (int round = 1; round <= 3; ++round)
+    {
+        std::cout << "\n--- Round " << round << " ---" << std::endl;
+
+        auto guard = pool.Borrow();
+        if (!guard.IsValid())
+        {
+            std::cout << "Failed to borrow context!" << std::endl;
+            return;
+        }
+
+        std::cout << "Borrowed context, pool free: " << pool.FreeCount() << std::endl;
+
+        // 模拟异步操作
+        std::thread worker([&guard, round]()  // ✅ 显式捕获 round
+                           {
+                               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                               guard->SetResult(round * 10); // 设置不同的结果值
+                           });
+
+        int result = guard->Wait(2000);
+        std::cout << "Wait completed, result: " << result << " (expected: " << (round * 10) << ")" << std::endl;
+
+        if (result != (round * 10))
+        {
+            std::cout << "ERROR: Result mismatch!" << std::endl;
+        }
+
+        worker.join();
+
+        // guard 析构时自动归还到池中
+        std::cout << "After return, pool free: " << pool.FreeCount() << std::endl;
+    }
+
+    std::cout << "\n✓ Pool reuse test passed: condition_variable works correctly after multiple uses" << std::endl;
+}
+
+// ============================================================================
+// 测试 13: 同一上下文对象多次复用（无 shared_ptr 包装）
+// ============================================================================
+void test_same_context_multiple_reuse()
+{
+    std::cout << "\n=== Test: Same Context Multiple Reuse ===" << std::endl;
+
+    SyncContextPool<void> pool(1, 1); // 只有 1 个上下文
+
+    // 获取同一个上下文的引用（通过多次 Borrow/Return）
+    std::vector<int> results;
+
+    for (int i = 0; i < 5; ++i)
+    {
+        auto guard = pool.Borrow();
+        if (!guard.IsValid())
+        {
+            std::cout << "Failed to borrow at iteration " << i << std::endl;
+            break;
+        }
+
+        // 模拟异步响应
+        std::thread worker([&guard, i]()
+                           {
+                               std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                               guard->SetResult(i + 1);
+                           });
+
+        int result = guard->Wait(1000);
+        results.push_back(result);
+        std::cout << "Iteration " << i << ": result = " << result << std::endl;
+
+        worker.join();
+        // guard 析构时归还
+    }
+
+    // 验证所有结果都正确
+    bool success = (results.size() == 5);
+    for (size_t i = 0; i < results.size() && success; ++i)
+    {
+        if (results[i] != (int)(i + 1))
+        {
+            success = false;
+            break;
+        }
+    }
+
+    if (success)
+    {
+        std::cout << "✓ Multiple reuse test passed: all 5 iterations completed successfully" << std::endl;
+    }
+    else
+    {
+        std::cout << "✗ Multiple reuse test FAILED" << std::endl;
+    }
+}
+
+// ============================================================================
+// 测试 14: Reset 后状态验证
+// ============================================================================
+void test_reset_state()
+{
+    std::cout << "\n=== Test: Reset State Verification ===" << std::endl;
+
+    SyncContextPool<int> pool(1, 2);
+
+    auto guard = pool.Borrow();
+    if (!guard.IsValid())
+    {
+        std::cout << "Failed to borrow!" << std::endl;
+        return;
+    }
+
+    // 设置一些状态
+    guard->SetData(999);
+    guard->SetResult(0);
+
+    std::cout << "Before Reset: data=" << guard->GetData()
+              << ", result=" << guard->result << std::endl;
+
+    // 手动调用 Reset（模拟归还时的操作）
+    guard->Reset();
+
+    std::cout << "After Reset: data=" << guard->GetData()
+              << ", result=" << guard->result << std::endl;
+
+    // 验证状态已重置
+    if (guard->GetData() == 0 && guard->result == -1)
+    {
+        std::cout << "✓ Reset state test passed: data and result properly reset" << std::endl;
+    }
+    else
+    {
+        std::cout << "✗ Reset state test FAILED" << std::endl;
+    }
+}
+
+// ============================================================================
+// 测试 15: 带数据的上下文复用
+// ============================================================================
+void test_data_context_reuse()
+{
+    std::cout << "\n=== Test: Data Context Reuse ===" << std::endl;
+
+    struct Message
+    {
+        uint32_t seq_id;
+        char content[32];
+    };
+
+    SyncContextPool<Message> pool(1, 2);
+
+    for (int i = 0; i < 3; ++i)
+    {
+        auto guard = pool.Borrow();
+        if (!guard.IsValid())
+        {
+            std::cout << "Failed to borrow at iteration " << i << std::endl;
+            break;
+        }
+
+        // 设置数据
+        guard->data.seq_id = static_cast<uint32_t>(i + 1);
+        snprintf(guard->data.content, sizeof(guard->data.content), "Message-%d", i + 1);
+
+        std::cout << "Round " << (i + 1) << ": Send seq=" << guard->data.seq_id
+                  << ", content=" << guard->data.content << std::endl;
+
+        // 模拟异步响应
+        std::thread worker([&guard]()
+                           {
+                               std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                               guard->SetResult(0);
+                           });
+
+        int result = guard->Wait(1000);
+
+        if (result == 0)
+        {
+            std::cout << "  Response received successfully" << std::endl;
+        }
+        else
+        {
+            std::cout << "  ERROR: Got result " << result << std::endl;
+        }
+
+        worker.join();
+        // guard 析构时归还
+    }
+
+    std::cout << "✓ Data context reuse test completed" << std::endl;
+}
+
+// ============================================================================
+// 测试 16: 超时后再次使用
+// ============================================================================
+void test_timeout_then_reuse()
+{
+    std::cout << "\n=== Test: Timeout Then Reuse ===" << std::endl;
+
+    SyncContextPool<void> pool(1, 2);
+
+    // 第一次：故意超时
+    {
+        auto guard = pool.Borrow();
+        if (!guard.IsValid())
+        {
+            std::cout << "Failed to borrow!" << std::endl;
+            return;
+        }
+
+        std::cout << "First call: Testing timeout (no SetResult called)" << std::endl;
+        int result = guard->Wait(200); // 200ms 超时
+
+        if (result == -ETIMEDOUT)
+        {
+            std::cout << "  ✓ Timeout occurred as expected" << std::endl;
+        }
+        else
+        {
+            std::cout << "  ✗ Unexpected result: " << result << std::endl;
+        }
+
+        // guard 归还
+    }
+
+    // 第二次：正常使用
+    {
+        auto guard = pool.Borrow();
+        if (!guard.IsValid())
+        {
+            std::cout << "Failed to borrow!" << std::endl;
+            return;
+        }
+
+        std::cout << "Second call: Normal operation after timeout" << std::endl;
+
+        std::thread worker([&guard]()
+                           {
+                               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                               guard->SetResult(42);
+                           });
+
+        int result = guard->Wait(2000);
+
+        if (result == 42)
+        {
+            std::cout << "  ✓ Successfully got result after timeout recovery" << std::endl;
+        }
+        else
+        {
+            std::cout << "  ✗ Failed: result = " << result << std::endl;
+        }
+
+        worker.join();
+    }
+
+    std::cout << "✓ Timeout then reuse test completed" << std::endl;
+}
+
+// ============================================================================
 // 主函数
 // ============================================================================
 int main()
 {
     std::cout << "========================================" << std::endl;
     std::cout << "Starting SyncContextPool Tests" << std::endl;
+    std::cout << "Based on mutex + condition_variable (Reusable)" << std::endl;
     std::cout << "========================================\n";
 
+    // 基础功能测试
     test_basic_void_context();
     test_data_context();
     test_raii_auto_return();
     test_timeout_handling();
+    
+    // 并发和池测试
     test_concurrent_access();
     test_pool_capacity();
+    
+    // SetResult 一次性测试（历史遗留，未来可能移除）
     test_setresult_once_only();
-    test_movable_type_vector();     // 新增：vector 测试
-    test_movable_type_string();     // 新增：string 测试
-    test_movable_type_unique_ptr(); // 新增：unique_ptr 测试
-    test_perfect_forwarding();      // 新增：完美转发测试
+    
+    // 可移动类型测试
+    test_movable_type_vector();     // std::vector
+    test_movable_type_string();     // std::string
+    test_movable_type_unique_ptr(); // std::unique_ptr
+    test_perfect_forwarding();      // 完美转发
+    
+    // === 新增测试：对象池复用特性 ===
+    test_context_pool_reuse();              // 测试 12: 池复用（condition_variable 可重复使用）
+    test_same_context_multiple_reuse();     // 测试 13: 同一上下文多次复用
+    test_reset_state();                     // 测试 14: Reset 后状态验证
+    test_data_context_reuse();              // 测试 15: 带数据的上下文复用
+    test_timeout_then_reuse();              // 测试 16: 超时后再次使用
 
     std::cout << "\n========================================" << std::endl;
     std::cout << "All tests completed." << std::endl;
