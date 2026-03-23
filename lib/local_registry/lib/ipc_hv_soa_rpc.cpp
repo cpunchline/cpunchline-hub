@@ -233,7 +233,7 @@ int32_t connect_with_daemon()
         LOG_PRINT_ERROR("wait for daemon connection timeout, timeout[%u]ms", LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
         return IPC_HV_SOA_RET_TIMEOUT;
     }
-    if (wait_result != IPC_HV_SOA_RET_SUCCESS)
+    if (wait_result != IPC_HV_SOA_COND_STATE_CONNECTED)
     {
         LOG_PRINT_ERROR("daemon connection failed, wait_result[%d]", wait_result);
         return IPC_HV_SOA_RET_FAIL;
@@ -544,7 +544,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
                 LOG_PRINT_ERROR("wait response timeout for service_id[%u], msg_seqid[%u], timeout[%u]ms", service_id, msg_seqid, timeout_ms);
                 ret = IPC_HV_SOA_RET_TIMEOUT;
             }
-            else if (wait_result != IPC_HV_SOA_RET_SUCCESS)
+            else if (wait_result != IPC_HV_SOA_COND_STATE_SUCCESS)
             {
                 LOG_PRINT_ERROR("response failed, ctx->result[%d], service_id[%u], msg_seqid[%u]", ctx->result, service_id, msg_seqid);
                 ret = IPC_HV_SOA_RET_FAIL;
