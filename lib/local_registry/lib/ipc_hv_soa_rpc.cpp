@@ -517,7 +517,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         // Store context in pending_requests map for later completion
         {
             std::lock_guard<std::mutex> lock(dest->pending_requests_mutex);
-            dest->pending_requests[msg_seqid] = guard.get_shared_ptr();
+            dest->pending_requests.insert({msg_seqid, guard.get_shared_ptr()});
         }
 
         // Send message
@@ -819,6 +819,10 @@ int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_type, uin
         if (nullptr != method_resp_data && method_resp_data_len > 0)
         {
             memcpy(ctx_ptr->data.data, method_resp_data, method_resp_data_len);
+        }
+        else
+        {
+            memset(ctx_ptr->data.data, 0x00, sizeof(ctx_ptr->data.data));
         }
     }
 

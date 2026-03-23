@@ -598,7 +598,7 @@ int32_t ipc_hv_soa_method_notify(uint32_t service_id, void *method_req_data, uin
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
-    uint32_t msg_seqid = it->service_provider->msg_seqid++;
+    uint32_t msg_seqid = it->service_provider->msg_seqid.fetch_add(1);
     if (nullptr == method_req_data || method_req_data_len == 0)
     {
         ret = send_msg_to_process(it->service_provider, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY, service_id, 0, nullptr);
@@ -644,7 +644,7 @@ int32_t ipc_hv_soa_method_sync(uint32_t service_id, void *method_req_data, uint3
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
-    uint32_t msg_seqid = it->service_provider->msg_seqid++;
+    uint32_t msg_seqid = it->service_provider->msg_seqid.fetch_add(1);
     if (nullptr == method_req_data || method_req_data_len == 0)
     {
         ret = send_msg_to_process_sync(it->service_provider, g_client->client_id, msg_seqid, service_id, 0, nullptr, method_resp_data, method_resp_data_len, timeout_ms);
@@ -686,7 +686,7 @@ int32_t ipc_hv_soa_method_async(uint32_t service_id, void *method_req_data, uint
     }
 
     it->service_async_handler = (void *)async_cb;
-    uint32_t msg_seqid = it->service_provider->msg_seqid++;
+    uint32_t msg_seqid = it->service_provider->msg_seqid.fetch_add(1);
     if (nullptr == method_req_data || method_req_data_len == 0)
     {
         ret = send_msg_to_process(it->service_provider, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_ASYNC, service_id, 0, nullptr);
@@ -789,7 +789,7 @@ int32_t ipc_hv_soa_event_trigger(uint32_t service_id, void *event_data, uint32_t
 
     for (auto &listener : it->service_listeners)
     {
-        uint32_t msg_seqid = listener.second->msg_seqid++;
+        uint32_t msg_seqid = listener.second->msg_seqid.fetch_add(1);
         if (nullptr == event_data || 0 == event_data_len)
         {
             ret = send_msg_to_process(listener.second, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY, service_id, 0, nullptr);
