@@ -221,7 +221,7 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
     }
     else
     {
-        LOG_PRINT_DEBUG("pb_encode service_id[%u] success(no need)");
+        LOG_PRINT_DEBUG("pb_encode service_id[%u] success(no need)", service_id);
     }
 
     st_local_msg_header send_msg_header = {};
