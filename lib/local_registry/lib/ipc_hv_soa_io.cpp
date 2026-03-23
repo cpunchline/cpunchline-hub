@@ -20,12 +20,29 @@ void on_close(hio_t *io)
 
     if (nullptr != g_client->m_daemon_io && hio_id(io) == hio_id(g_client->m_daemon_io))
     {
+        // 处理 daemon 连接断开
         {
-            std::unique_lock<std::mutex> daemo_lock(g_client->daemo_mutex);
-            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_DISCONNECTED;
+            std::lock_guard<std::mutex> daemon_lock(g_client->pending_requests_mutex);
+            // 通知所有待响应的请求连接已断开
+            for (auto &pair : g_client->pending_requests)
+            {
+                auto ctx = pair.second;
+                if (ctx)
+                {
+                    ctx->data.ret = IPC_HV_SOA_RET_FAIL;
+                    ctx->SetResult(IPC_HV_SOA_RET_FAIL);
+                }
+            }
+            g_client->pending_requests.clear();
             g_client->m_daemon_io = nullptr;
             g_client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
-            g_client->daemon_cond.notify_all();
+        }
+
+        // 如果 connect_ctx 还在等待中(连接未完成就断开),需要通知它
+        if (g_client->connect_ctx)
+        {
+            g_client->connect_ctx->data.ret = IPC_HV_SOA_RET_FAIL;
+            g_client->connect_ctx->SetResult(IPC_HV_SOA_RET_FAIL);
         }
 
         {
@@ -298,11 +315,22 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
             break;
     }
 
-    std::lock_guard<std::mutex> daemon_lock{g_client->daemo_mutex};
-    g_client->daemon_cond_msgid = recv_msg_header->service_id;
-    memcpy(g_client->daemon_cond_msgdata, pstruct, fields_size);
-    g_client->daemon_cond_ret = ret;
-    g_client->daemon_cond.notify_one();
+    // 查找对应的待响应请求并设置结果
+    // 使用 msg_seqid 作为索引,因为每个请求都有唯一的序列号
+    std::lock_guard<std::mutex> daemon_lock(g_client->pending_requests_mutex);
+    auto it = g_client->pending_requests.find(recv_msg_header->msg_seqid);
+    if (it != g_client->pending_requests.end())
+    {
+        auto ctx = it->second;
+        if (ctx)
+        {
+            ctx->data.msgid = recv_msg_header->service_id;
+            memcpy(ctx->data.data, pstruct, fields_size);
+            ctx->data.ret = ret;
+            // 通过 promise/future 机制通知等待的线程
+            ctx->SetResult(ret);
+        }
+    }
 }
 
 void on_recv_process(hio_t *io, void *buf, int readbytes)
@@ -436,16 +464,21 @@ void on_connect(hio_t *io)
         hio_setcb_write(io, on_write);
         if (nullptr != g_client->m_daemon_io && hio_id(io) == hio_id(g_client->m_daemon_io))
         {
-            if (nullptr == g_client->m_daemon_io)
-            {
-                return;
-            }
             LOG_PRINT_DEBUG("connected with daemon!");
-            std::unique_lock daemon_lock(g_client->daemo_mutex);
-            g_client->daemon_cond_msgid = 0;
-            memset(g_client->daemon_cond_msgdata, 0x00, sizeof(g_client->daemon_cond_msgdata));
-            g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_CONNECTED;
-            g_client->daemon_cond.notify_one();
+            // 连接成功,设置 client_status 为 ONLINE
+            g_client->client_status = LOCAL_CLIENT_STATUS_ONLINE;
+            // 连接成功,清除待响应请求
+            {
+                std::lock_guard<std::mutex> daemon_lock(g_client->pending_requests_mutex);
+                g_client->pending_requests.clear();
+            }
+            // 通知等待连接的线程(如果存在)
+            // 使用 connect_ctx 的 SetResult 来通知 connect_with_daemon() 中的等待线程
+            if (g_client->connect_ctx)
+            {
+                g_client->connect_ctx->data.ret = IPC_HV_SOA_RET_SUCCESS;
+                g_client->connect_ctx->SetResult(IPC_HV_SOA_RET_SUCCESS);
+            }
         }
         else
         {

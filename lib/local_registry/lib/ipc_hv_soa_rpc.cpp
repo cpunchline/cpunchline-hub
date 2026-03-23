@@ -4,7 +4,8 @@ extern std::atomic_bool g_init_flag;
 extern std::shared_ptr<ipc_hv_soa_client> g_client;
 
 // Internal helper function to encode and send message to daemon
-static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size)
+// Optional msg_seqid parameter: if provided, use it; otherwise generate a new one
+static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_seqid, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size)
 {
     int32_t ret = IPC_HV_SOA_RET_SUCCESS;
 
@@ -20,7 +21,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_ty
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    LOG_PRINT_DEBUG("send service_id[%u] to daemon fd[%d]", service_id, hio_fd(g_client->m_daemon_io));
+    LOG_PRINT_DEBUG("send service_id[%u] service_seqid[%u] to daemon fd[%d]", service_id, msg_seqid, hio_fd(g_client->m_daemon_io));
 
     size_t encoded_size = 0;
     if (nullptr != msgdata && field_size > 0)
@@ -55,7 +56,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_ty
 
     st_local_msg_header send_msg_header = {};
     send_msg_header.client_id = MODULE_ID_AUTOLIB_LOCAL_REGISTRY;
-    send_msg_header.msg_seqid = g_client->m_msg_seqid.fetch_add(1);
+    send_msg_header.msg_seqid = msg_seqid;
     send_msg_header.msg_type = msg_type;
     send_msg_header.service_id = service_id;
     send_msg_header.msg_len = (uint32_t)encoded_size;
@@ -84,7 +85,8 @@ static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_ty
 
 int32_t send_msg_to_daemon(uint32_t service_id, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fileds, uint32_t field_size)
 {
-    return _send_msg_to_daemon_internal(service_id, msg_type, msgdata, fileds, field_size);
+    uint32_t msg_seqid = g_client->m_msg_seqid.fetch_add(1);
+    return _send_msg_to_daemon_internal(service_id, msg_seqid, msg_type, msgdata, fileds, field_size);
 }
 
 int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const void *msgdata, const pb_msgdesc_t *fields, uint32_t field_size, void *resp_data, uint32_t *resp_data_len, uint32_t timeout_ms)
@@ -102,65 +104,79 @@ int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const vo
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
-    // Lock and reset condition state before sending
-    std::unique_lock<std::mutex> daemon_lock(g_client->daemo_mutex);
-    g_client->daemon_cond_msgid = 0;
-    memset(g_client->daemon_cond_msgdata, 0x00, sizeof(g_client->daemon_cond_msgdata));
-    g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
+    uint32_t msg_seqid = g_client->m_msg_seqid.fetch_add(1);
 
-    // Send message using internal helper function
-    int32_t ret = _send_msg_to_daemon_internal(service_id, msg_type, msgdata, fields, field_size);
+    // Borrow a sync context from the pool using RAII
+    auto guard = g_client->daemon_sync_pool.Borrow();
+    if (!guard.IsValid())
+    {
+        LOG_PRINT_ERROR("failed to borrow sync context from pool");
+        return IPC_HV_SOA_RET_FAIL;
+    }
+    auto ctx = guard.get();
+
+    // Set context data - access through SyncContext's data member
+    ctx->data.msgid = service_id;
+    ctx->data.ret = IPC_HV_SOA_RET_FAIL;
+    memset(ctx->data.data, 0x00, sizeof(ctx->data.data));
+
+    // Add context to pending requests map using msg_seqid as key
+    // This ensures each request has a unique identifier in the map
+    {
+        std::lock_guard<std::mutex> pending_lock(g_client->pending_requests_mutex);
+        g_client->pending_requests.insert({msg_seqid, guard.get_shared_ptr()});
+    }
+
+    // Send message using internal helper function with the same msg_seqid
+    int32_t ret = _send_msg_to_daemon_internal(service_id, msg_seqid, msg_type, msgdata, fields, field_size);
     if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
-        LOG_PRINT_ERROR("_send_msg_to_daemon_internal fail, ret[%d]", ret);
-        // Clean condition state on error
-        g_client->daemon_cond_msgid = 0;
-        g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
+        LOG_PRINT_ERROR("_send_msg_to_daemon_internal fail, ret[%d], msg_seqid[%u]", ret, msg_seqid);
+        // Remove from pending requests map
+        {
+            std::lock_guard<std::mutex> pending_lock(g_client->pending_requests_mutex);
+            g_client->pending_requests.erase(msg_seqid);
+        }
+        // Set context result to indicate error
+        ctx->data.ret = IPC_HV_SOA_RET_FAIL;
+        ctx->SetResult(IPC_HV_SOA_RET_FAIL);
         return ret;
     }
 
-    auto timeout_duration = std::chrono::milliseconds(timeout_ms);
-    bool ready = g_client->daemon_cond.wait_for(daemon_lock, timeout_duration, []
-                                                {
-                                                    return (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_INIT);
-                                                });
+    // Wait for response with timeout
+    int wait_result = ctx->Wait(timeout_ms);
 
-    if (!ready)
+    if (wait_result < 0)
     {
-        LOG_PRINT_ERROR("wait response timeout for service_id[%u], timeout[%u]ms", service_id, timeout_ms);
+        LOG_PRINT_ERROR("wait response timeout for service_id[%u], msg_seqid[%u], timeout[%u]ms", service_id, msg_seqid, timeout_ms);
         ret = IPC_HV_SOA_RET_TIMEOUT;
     }
-    else if (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_SUCCESS)
+    else if (ctx->data.ret != IPC_HV_SOA_COND_STATE_SUCCESS)
     {
-        LOG_PRINT_ERROR("daemon processing failed, daemon_cond_ret[%d], service_id[%u]",
-                        g_client->daemon_cond_ret, service_id);
+        LOG_PRINT_ERROR("daemon processing failed, ctx->data.ret[%d], service_id[%u], msg_seqid[%u]",
+                        ctx->data.ret, service_id, msg_seqid);
         ret = IPC_HV_SOA_RET_FAIL;
     }
-    else if (g_client->daemon_cond_msgid != service_id)
+    else if (ctx->data.msgid != service_id)
     {
-        LOG_PRINT_ERROR("response service_id mismatch, expected[%u], got[%u]",
-                        service_id, g_client->daemon_cond_msgid);
+        LOG_PRINT_ERROR("response service_id mismatch, expected[%u], got[%u], msg_seqid[%u]",
+                        service_id, ctx->data.msgid, msg_seqid);
         ret = IPC_HV_SOA_RET_FAIL;
     }
     else
     {
         // Successfully received response
-        LOG_PRINT_DEBUG("received response for service_id[%u], daemon_cond_ret[%d]",
-                        service_id, g_client->daemon_cond_ret);
+        LOG_PRINT_DEBUG("received response for service_id[%u], msg_seqid[%u], ctx->data.ret[%d]",
+                        service_id, msg_seqid, ctx->data.ret);
 
         // Copy response data if caller provided buffer
         if (nullptr != resp_data && nullptr != resp_data_len)
         {
-            // Note: The actual response size depends on the message type.
-            // Caller should provide a buffer large enough based on the expected response type.
-            // We copy up to the buffer size provided by caller.
-            // In practice, for known service_id, caller knows the expected response structure.
-
             // For safety, we limit the copy to LOCAL_REGISTRY_MSG_SIZE_MAX
             uint32_t copy_size = std::min(*resp_data_len, (uint32_t)LOCAL_REGISTRY_MSG_SIZE_MAX);
             if (copy_size > 0)
             {
-                memcpy(resp_data, g_client->daemon_cond_msgdata, copy_size);
+                memcpy(resp_data, ctx->data.data, copy_size);
             }
             // Update the actual response length
             *resp_data_len = copy_size;
@@ -169,17 +185,17 @@ int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const vo
         ret = IPC_HV_SOA_RET_SUCCESS;
     }
 
-    // Clean condition state
-    g_client->daemon_cond_msgid = 0;
-    g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
+    // Remove from pending requests map
+    {
+        std::lock_guard<std::mutex> pending_lock(g_client->pending_requests_mutex);
+        g_client->pending_requests.erase(msg_seqid);
+    }
 
     return ret;
 }
 
 int32_t connect_with_daemon()
 {
-    int32_t ret = IPC_HV_SOA_RET_SUCCESS;
-
     g_client->m_daemon_io = hio_create_socket(g_client->m_main_loop, LOCAL_REGISTRY_SOCKET_PATH, -1, HIO_TYPE_SOCK_STREAM, HIO_CLIENT_SIDE);
     if (nullptr == g_client->m_daemon_io)
     {
@@ -197,12 +213,10 @@ int32_t connect_with_daemon()
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    std::unique_lock daemon_lock(g_client->daemo_mutex);
-
-    // init
-    g_client->daemon_cond_msgid = 0;
-    memset(g_client->daemon_cond_msgdata, 0x00, sizeof(g_client->daemon_cond_msgdata));
-    g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
+    // Create a shared sync context for connection synchronization
+    // This context will be used by both connect_with_daemon() and on_connect() callback
+    g_client->connect_ctx = std::make_shared<SyncContext<ipc_hv_soa_daemon_sync_context>>();
+    g_client->connect_ctx->Reset();
 
     hio_setcb_close(g_client->m_daemon_io, on_close);
     hio_setcb_connect(g_client->m_daemon_io, on_connect);
@@ -213,33 +227,24 @@ int32_t connect_with_daemon()
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    auto timeout = std::chrono::milliseconds(LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
-    bool ready = g_client->daemon_cond.wait_for(daemon_lock, timeout, []
-                                                {
-                                                    return (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_INIT);
-                                                });
-    if (!ready)
+    // Wait for connection to complete using the shared sync context
+    // on_connect callback will call SetResult() to notify this waiting thread
+    int wait_result = g_client->connect_ctx->Wait(LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
+
+    if (wait_result < 0)
     {
-        ret = IPC_HV_SOA_RET_TIMEOUT;
-    }
-    else
-    {
-        if (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_CONNECTED)
-        {
-            LOG_PRINT_ERROR("connect with daemon fail, invalid daemon_cond_ret[%d]!", g_client->daemon_cond_ret);
-            ret = IPC_HV_SOA_RET_FAIL;
-        }
-        else
-        {
-            g_client->client_status = LOCAL_CLIENT_STATUS_ONLINE;
-        }
+        LOG_PRINT_ERROR("wait for daemon connection timeout, timeout[%u]ms", LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
+        return IPC_HV_SOA_RET_TIMEOUT;
     }
 
-    // clean
-    g_client->daemon_cond_msgid = 0;
-    g_client->daemon_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
+    if (g_client->connect_ctx->data.ret != IPC_HV_SOA_RET_SUCCESS)
+    {
+        LOG_PRINT_ERROR("daemon connection failed, ctx->data.ret[%d]", g_client->connect_ctx->data.ret);
+        return IPC_HV_SOA_RET_FAIL;
+    }
 
-    return ret;
+    LOG_PRINT_DEBUG("connected with daemon successfully");
+    return IPC_HV_SOA_RET_SUCCESS;
 }
 
 int32_t connect_with_process_client(std::shared_ptr<ipc_hv_soa_process_client> client)

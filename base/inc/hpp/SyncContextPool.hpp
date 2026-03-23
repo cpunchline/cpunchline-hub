@@ -253,6 +253,12 @@ public:
         return ctx_sptr_.get() != nullptr;
     }
 
+    /// 获取底层的 shared_ptr
+    std::shared_ptr<ContextType> get_shared_ptr() const noexcept
+    {
+        return ctx_sptr_;
+    }
+
 protected:
     // 保护构造函数用于创建空 guard
     SyncContextGuard(PoolType &pool, bool) :

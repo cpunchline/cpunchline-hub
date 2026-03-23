@@ -4,6 +4,7 @@
 #include "local_registry_common.hpp"
 
 #include "generator_autolib.h"
+#include "hpp/SyncContextPool.hpp"
 
 struct ipc_hv_soa_process_client_data
 {
@@ -41,6 +42,26 @@ struct ipc_hv_soa_service
     void *service_async_handler;                                                                // 服务异步处理函数(only used by method)
     std::shared_ptr<ipc_hv_soa_process_client> service_provider;                                // 服务提供者
     std::unordered_map<uint32_t, std::shared_ptr<ipc_hv_soa_process_client>> service_listeners; // 监听该服务的消费者列表(client id)
+};
+
+// ============================================================================
+// Daemon 同步上下文结构 - 用于替换原有的 daemon_cond_* 字段
+// ============================================================================
+struct ipc_hv_soa_daemon_sync_context
+{
+    uint32_t msgid;                            ///< 消息 ID
+    uint8_t data[LOCAL_REGISTRY_MSG_SIZE_MAX]; ///< 请求/响应数据
+    int32_t ret;                               ///< 返回结果:0=成功,-1=错误
+
+    /// 默认构造函数
+    ipc_hv_soa_daemon_sync_context() :
+        msgid(0), ret(IPC_HV_SOA_RET_FAIL)
+    {
+        std::memset(data, 0, sizeof(data));
+    }
+
+    /// 允许默认拷贝构造和赋值(使用编译器生成的默认实现)
+    /// 由于包含固定大小数组,编译器会生成正确的 memcpy 语义
 };
 
 struct ipc_hv_soa_timer
@@ -81,11 +102,22 @@ struct ipc_hv_soa_client
 
     // one connecter(daemon)
     hio_t *m_daemon_io; // LOCAL_REGISTEY_SOCKET_FMT
-    uint32_t daemon_cond_msgid;
-    uint8_t daemon_cond_msgdata[LOCAL_REGISTRY_MSG_SIZE_MAX];
-    int32_t daemon_cond_ret;
-    std::mutex daemo_mutex;
-    std::condition_variable daemon_cond;
+
+    // Daemon 同步上下文池 - 替代原有的 daemon_cond_* 字段
+    // 使用 SyncContextPool 管理 daemon 同步请求 - 响应上下文
+    // 最大容量 8 个上下文,通过构造函数初始化
+    SyncContextPool<ipc_hv_soa_daemon_sync_context> daemon_sync_pool{1, 8};
+
+    // 用于连接同步的共享上下文指针
+    // connect_with_daemon() 创建上下文并存储在此指针中
+    // on_connect() 回调通过此指针设置连接结果
+    std::shared_ptr<SyncContext<ipc_hv_soa_daemon_sync_context>> connect_ctx;
+
+    // 用于追踪待响应的请求 (key: seqid)
+    // 使用 seqid 作为索引,因为每个请求都有唯一的序列号,避免高并发时 service_id 冲突
+    // 存储 SyncContext 的 shared_ptr,因为 SyncContext 内部已经使用 shared_ptr 管理
+    std::mutex pending_requests_mutex;
+    std::unordered_map<uint32_t, std::shared_ptr<SyncContext<ipc_hv_soa_daemon_sync_context>>> pending_requests;
 
     // one accepter
     hio_t *m_listen_io; // LOCAL_REGISTEY_SOCKET_FMT1
@@ -94,12 +126,12 @@ struct ipc_hv_soa_client
     std::thread msg_handler_thread;
     UnBoundedQueue<ipc_hv_soa_process_client_data> msg_handler_queue;
 
-    uint32_t client_id;                // 客户端ID(服务注册中心分配)
-    pid_t client_pid;                  // 客户端进程ID
-    std::string client_name;           // 客户端进程名
-    std::string client_localaddr;      // daemon connect socket
-    std::string client_localaddr1;     // listen socket
-    LOCAL_CLIENT_STATUS client_status; // 客户端进程运行状态
+    uint32_t client_id;                             // 客户端ID(服务注册中心分配)
+    pid_t client_pid;                               // 客户端进程ID
+    std::string client_name;                        // 客户端进程名
+    std::string client_localaddr;                   // daemon connect socket
+    std::string client_localaddr1;                  // listen socket
+    std::atomic<LOCAL_CLIENT_STATUS> client_status; // 客户端进程运行状态
     std::atomic_uint32_t m_msg_seqid{1};
 };
 
