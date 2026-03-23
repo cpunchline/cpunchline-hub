@@ -195,7 +195,7 @@ int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const vo
     return ret;
 }
 
-int32_t connect_with_daemon()
+int32_t connect_with_daemon(void)
 {
     g_client->m_daemon_io = hio_create_socket(g_client->m_main_loop, LOCAL_REGISTRY_SOCKET_PATH, -1, HIO_TYPE_SOCK_STREAM, HIO_CLIENT_SIDE);
     if (nullptr == g_client->m_daemon_io)
@@ -600,7 +600,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
     return ret;
 }
 
-int32_t register_client_req()
+int32_t register_client_req(void)
 {
     int32_t ret = IPC_HV_SOA_RET_SUCCESS;
 
