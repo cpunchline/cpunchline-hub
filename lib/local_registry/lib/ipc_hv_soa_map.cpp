@@ -16,8 +16,8 @@ static std::shared_ptr<ipc_hv_soa_process_client> _create_process_client(uint32_
     client->client_status = LOCAL_CLIENT_STATUS_INIT;
     client->client_send_io = nullptr;
     client->client_recv_io = nullptr;
-    client->send_msg_seqid = 0;
-    client->send_msg_map.clear();
+    client->msg_seqid = 0;
+    client->msg_map.clear();
     client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
 
     return client;

@@ -26,8 +26,8 @@ struct ipc_hv_soa_process_client
     hio_t *client_send_io;                          // send io
     hio_t *client_recv_io;                          // recv io
 
-    std::atomic_uint32_t send_msg_seqid;
-    std::unordered_map<uint64_t, ipc_hv_soa_process_client_data> send_msg_map; // key: uint64_t = service_id(uint32_t) + send_msg_seqid(uint32_t);
+    std::atomic_uint32_t msg_seqid;
+    std::unordered_map<uint64_t, ipc_hv_soa_process_client_data> msg_map; // key: uint64_t = service_id(uint32_t) + msg_seqid(uint32_t);
     int32_t send_msg_cond_ret;
     std::mutex send_msg_mutex;
     std::condition_variable send_msg_cond;

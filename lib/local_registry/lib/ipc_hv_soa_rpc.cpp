@@ -278,8 +278,8 @@ int32_t connect_with_process_client(std::shared_ptr<ipc_hv_soa_process_client> c
     std::unique_lock send_msg_lock(client->send_msg_mutex);
 
     // init
-    client->send_msg_seqid = 0;
-    client->send_msg_map.clear();
+    client->msg_seqid = 0;
+    client->msg_map.clear();
     client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
 
     hio_setcb_close(client->client_send_io, on_close);
@@ -524,7 +524,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
 
         std::unique_lock<std::mutex> send_msg_lock(dest->send_msg_mutex);
-        dest->send_msg_map.insert({key, expected_resp_data});
+        dest->msg_map.insert({key, expected_resp_data});
         ret = hio_write(dest->client_send_io, buffer, LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
         if (ret < 0)
         {
@@ -549,8 +549,8 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
                     break;
                 }
 
-                auto it = dest->send_msg_map.find(key);
-                if (it != dest->send_msg_map.end())
+                auto it = dest->msg_map.find(key);
+                if (it != dest->msg_map.end())
                 {
                     real_resp_data = it->second;
                     if (real_resp_data.is_complete)
@@ -596,7 +596,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
                 LOG_PRINT_ERROR("ipc_hv_soa_method_sync[%u] fail, ret[%d]", service_id, ret);
             }
         }
-        dest->send_msg_map.erase(key);
+        dest->msg_map.erase(key);
     }
     else
     {
@@ -751,7 +751,7 @@ int32_t ipc_hv_soa_inn_trigger_to_client(std::shared_ptr<ipc_hv_soa_service> ser
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
-    uint32_t msg_seqid = service->service_provider->send_msg_seqid++;
+    uint32_t msg_seqid = service->service_provider->msg_seqid++;
     if (nullptr == event_data || 0 == event_data_len)
     {
         ret = send_msg_to_process(client, g_client->client_id, msg_seqid, E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY, service->service_id, 0, nullptr);
@@ -789,8 +789,8 @@ int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_seqid, vo
     bool getsync = false;
 
     uint64_t key = ((uint64_t)service_id << 32) | (uint64_t)msg_seqid;
-    auto it1 = it->service_provider->send_msg_map.find(key);
-    if (it1 != it->service_provider->send_msg_map.end())
+    auto it1 = it->service_provider->msg_map.find(key);
+    if (it1 != it->service_provider->msg_map.end())
     {
         getsync = true;
     }
