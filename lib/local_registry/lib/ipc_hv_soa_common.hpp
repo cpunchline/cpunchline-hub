@@ -22,20 +22,8 @@ struct ipc_hv_soa_process_client
     hio_t *client_recv_io;                          // recv io
 
     std::atomic_uint32_t msg_seqid;
-
-    // Daemon 同步上下文池 - 替代原有的 daemon_cond_* 字段
-    // 使用 SyncContextPool 管理 daemon 同步请求 - 响应上下文
-    // 最大容量 8 个上下文，通过构造函数初始化
     SyncContextPool<ipc_hv_soa_sync_context> process_sync_pool{1, 8};
-
-    // 用于连接同步的共享上下文指针
-    // connect_with_daemon() 创建上下文并存储在此指针中
-    // on_connect() 回调通过此指针设置连接结果
     std::shared_ptr<SyncContext<ipc_hv_soa_sync_context>> connect_ctx;
-
-    // 用于追踪待响应的请求 (key: seqid)
-    // 使用 seqid 作为索引，因为每个请求都有唯一的序列号
-    // 存储 SyncContext 的 shared_ptr，因为 SyncContext 内部已经使用 shared_ptr 管理
     std::mutex pending_requests_mutex;
     std::unordered_map<uint32_t, std::shared_ptr<SyncContext<ipc_hv_soa_sync_context>>> pending_requests;
 };
@@ -50,10 +38,6 @@ struct ipc_hv_soa_service
     std::shared_ptr<ipc_hv_soa_process_client> service_provider;                                // 服务提供者
     std::unordered_map<uint32_t, std::shared_ptr<ipc_hv_soa_process_client>> service_listeners; // 监听该服务的消费者列表 (client id)
 };
-
-// ============================================================================
-// Daemon 同步上下文结构 - 用于替换原有的 daemon_cond_* 字段
-// ============================================================================
 
 struct ipc_hv_soa_timer
 {
@@ -94,19 +78,8 @@ struct ipc_hv_soa_client
     // one connecter(daemon)
     hio_t *m_daemon_io; // LOCAL_REGISTEY_SOCKET_FMT
 
-    // Daemon 同步上下文池 - 替代原有的 daemon_cond_* 字段
-    // 使用 SyncContextPool 管理 daemon 同步请求 - 响应上下文
-    // 最大容量 8 个上下文，通过构造函数初始化
     SyncContextPool<ipc_hv_soa_sync_context> daemon_sync_pool{1, 8};
-
-    // 用于连接同步的共享上下文指针
-    // connect_with_daemon() 创建上下文并存储在此指针中
-    // on_connect() 回调通过此指针设置连接结果
     std::shared_ptr<SyncContext<ipc_hv_soa_sync_context>> connect_ctx;
-
-    // 用于追踪待响应的请求 (key: seqid)
-    // 使用 seqid 作为索引，因为每个请求都有唯一的序列号
-    // 存储 SyncContext 的 shared_ptr，因为 SyncContext 内部已经使用 shared_ptr 管理
     std::mutex pending_requests_mutex;
     std::unordered_map<uint32_t, std::shared_ptr<SyncContext<ipc_hv_soa_sync_context>>> pending_requests;
 

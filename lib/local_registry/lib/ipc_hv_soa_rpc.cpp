@@ -214,8 +214,6 @@ int32_t connect_with_daemon()
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    // Create a shared sync context for connection synchronization
-    // This context will be used by both connect_with_daemon() and on_connect() callback
     g_client->m_msg_seqid = 1;
     g_client->connect_ctx = std::make_shared<SyncContext<ipc_hv_soa_sync_context>>();
     g_client->connect_ctx->Reset();
@@ -229,8 +227,6 @@ int32_t connect_with_daemon()
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    // Wait for connection to complete using the shared sync context
-    // on_connect callback will call SetResult() to notify this waiting thread
     int wait_result = g_client->connect_ctx->Wait(LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
     if (wait_result < 0)
     {
@@ -817,7 +813,7 @@ int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_type, uin
         std::lock_guard<std::mutex> lock(ctx_ptr->mutex);
         ctx_ptr->data.header.client_id = g_client->client_id;
         ctx_ptr->data.header.msg_seqid = msg_seqid;
-        ctx_ptr->data.header.msg_type = msg_type + 1;
+        ctx_ptr->data.header.msg_type = msg_type;
         ctx_ptr->data.header.service_id = service_id;
         ctx_ptr->data.header.msg_len = method_resp_data_len;
         if (nullptr != method_resp_data && method_resp_data_len > 0)
@@ -827,7 +823,7 @@ int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_type, uin
     }
 
     // Set result to wake up the waiting thread
-    ctx_ptr->SetResult(0);
+    ctx_ptr->SetResult(IPC_HV_SOA_COND_STATE_SUCCESS);
 
     LOG_PRINT_DEBUG("completed sync request for service_id[%u], msg_seqid[%u]", service_id, msg_seqid);
 

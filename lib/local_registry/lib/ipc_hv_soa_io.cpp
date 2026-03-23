@@ -20,10 +20,8 @@ void on_close(hio_t *io)
 
     if (nullptr != g_client->m_daemon_io && hio_id(io) == hio_id(g_client->m_daemon_io))
     {
-        // 处理 daemon 连接断开
         {
             std::lock_guard<std::mutex> daemon_lock(g_client->pending_requests_mutex);
-            // 通知所有待响应的请求连接已断开
             for (auto &pair : g_client->pending_requests)
             {
                 auto ctx = pair.second;
@@ -34,6 +32,7 @@ void on_close(hio_t *io)
             }
             g_client->pending_requests.clear();
             g_client->m_daemon_io = nullptr;
+            g_client->connect_ctx = nullptr;
             g_client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
         }
 
@@ -64,10 +63,8 @@ void on_close(hio_t *io)
             {
                 LOG_PRINT_ERROR("disconnect with process client[%s] not send!", client->client_name.c_str());
 
-                // 处理 process 连接断开
                 {
                     std::lock_guard<std::mutex> process_lock(client->pending_requests_mutex);
-                    // 通知所有待响应的请求连接已断开
                     for (auto &pair : client->pending_requests)
                     {
                         auto ctx = pair.second;
@@ -78,6 +75,7 @@ void on_close(hio_t *io)
                     }
                     g_client->pending_requests.clear();
                     client->client_send_io = nullptr;
+                    client->connect_ctx = nullptr;
                     client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
                 }
             }
@@ -317,8 +315,6 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
             break;
     }
 
-    // 查找对应的待响应请求并设置结果
-    // 使用 msg_seqid 作为索引,因为每个请求都有唯一的序列号
     std::lock_guard<std::mutex> daemon_lock(g_client->pending_requests_mutex);
     auto it = g_client->pending_requests.find(recv_msg_header->msg_seqid);
     if (it != g_client->pending_requests.end())
@@ -330,7 +326,6 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
             ctx->data.header.msg_seqid = recv_msg_header->msg_seqid;
             ctx->data.header.msg_type = recv_msg_header->msg_type;
             ctx->data.header.service_id = recv_msg_header->service_id;
-            ctx->data.header.msg_len = fields_size;
             if (recv_msg_header->msg_len > 0)
             {
                 ctx->data.header.msg_len = fields_size;
@@ -341,8 +336,6 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 ctx->data.header.msg_len = 0;
                 memset(ctx->data.data, 0x00, sizeof(ctx->data.data));
             }
-
-            // 通过 promise/future 机制通知等待的线程
             ctx->SetResult(ret);
         }
     }
@@ -479,15 +472,11 @@ void on_connect(hio_t *io)
         if (nullptr != g_client->m_daemon_io && hio_id(io) == hio_id(g_client->m_daemon_io))
         {
             LOG_PRINT_DEBUG("connected with daemon!");
-            // 连接成功,设置 client_status 为 ONLINE
             g_client->client_status = LOCAL_CLIENT_STATUS_ONLINE;
-            // 连接成功,清除待响应请求
             {
                 std::lock_guard<std::mutex> daemon_lock(g_client->pending_requests_mutex);
                 g_client->pending_requests.clear();
             }
-            // 通知等待连接的线程(如果存在)
-            // 使用 connect_ctx 的 SetResult 来通知 connect_with_daemon() 中的等待线程
             if (g_client->connect_ctx)
             {
                 g_client->connect_ctx->SetResult(IPC_HV_SOA_COND_STATE_CONNECTED);
@@ -506,16 +495,11 @@ void on_connect(hio_t *io)
                 if (nullptr != client->client_send_io && hio_id(io) == hio_id(client->client_send_io))
                 {
                     LOG_PRINT_INFO("connected with process client[%s]!", client->client_name.c_str());
-
-                    // 连接成功,设置 client_status 为 ONLINE
                     client->client_status = LOCAL_CLIENT_STATUS_ONLINE;
-                    // 连接成功,清除待响应请求
                     {
                         std::lock_guard<std::mutex> process_lock(client->pending_requests_mutex);
                         client->pending_requests.clear();
                     }
-                    // 通知等待连接的线程(如果存在)
-                    // 使用 connect_ctx 的 SetResult 来通知 connect_with_daemon() 中的等待线程
                     if (client->connect_ctx)
                     {
                         client->connect_ctx->SetResult(IPC_HV_SOA_COND_STATE_CONNECTED);
