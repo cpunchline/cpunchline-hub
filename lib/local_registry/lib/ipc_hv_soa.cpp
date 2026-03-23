@@ -261,7 +261,11 @@ int32_t ipc_hv_soa_destroy(uint32_t client_id)
                 hio_close(ptr.second->client_recv_io);
             }
 
-            ptr.second->msg_map.clear();
+            // Clear pending requests map
+            {
+                std::lock_guard<std::mutex> lock(ptr.second->pending_requests_mutex);
+                ptr.second->pending_requests.clear();
+            }
         }
         g_client->process_clients_map.clear();
     }

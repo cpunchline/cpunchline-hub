@@ -116,8 +116,11 @@ int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const vo
     auto ctx = guard.get();
 
     // Set context data - access through SyncContext's data member
-    ctx->data.msgid = service_id;
-    ctx->data.ret = IPC_HV_SOA_RET_FAIL;
+    ctx->data.header.client_id = g_client->client_id;
+    ctx->data.header.msg_seqid = msg_seqid;
+    ctx->data.header.msg_type = msg_type;
+    ctx->data.header.service_id = service_id;
+    ctx->data.header.msg_len = field_size;
     memset(ctx->data.data, 0x00, sizeof(ctx->data.data));
 
     // Add context to pending requests map using msg_seqid as key
@@ -138,36 +141,34 @@ int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const vo
             g_client->pending_requests.erase(msg_seqid);
         }
         // Set context result to indicate error
-        ctx->data.ret = IPC_HV_SOA_RET_FAIL;
-        ctx->SetResult(IPC_HV_SOA_RET_FAIL);
+        ctx->SetResult(IPC_HV_SOA_COND_STATE_INIT);
         return ret;
     }
 
     // Wait for response with timeout
     int wait_result = ctx->Wait(timeout_ms);
-
     if (wait_result < 0)
     {
         LOG_PRINT_ERROR("wait response timeout for service_id[%u], msg_seqid[%u], timeout[%u]ms", service_id, msg_seqid, timeout_ms);
         ret = IPC_HV_SOA_RET_TIMEOUT;
     }
-    else if (ctx->data.ret != IPC_HV_SOA_COND_STATE_SUCCESS)
+    else if (wait_result != IPC_HV_SOA_COND_STATE_SUCCESS)
     {
-        LOG_PRINT_ERROR("daemon processing failed, ctx->data.ret[%d], service_id[%u], msg_seqid[%u]",
-                        ctx->data.ret, service_id, msg_seqid);
+        LOG_PRINT_ERROR("daemon processing failed, wait_result[%d], service_id[%u], msg_seqid[%u]",
+                        wait_result, service_id, msg_seqid);
         ret = IPC_HV_SOA_RET_FAIL;
     }
-    else if (ctx->data.msgid != service_id)
+    else if (ctx->data.header.service_id != service_id)
     {
         LOG_PRINT_ERROR("response service_id mismatch, expected[%u], got[%u], msg_seqid[%u]",
-                        service_id, ctx->data.msgid, msg_seqid);
+                        service_id, ctx->data.header.service_id, msg_seqid);
         ret = IPC_HV_SOA_RET_FAIL;
     }
     else
     {
         // Successfully received response
-        LOG_PRINT_DEBUG("received response for service_id[%u], msg_seqid[%u], ctx->data.ret[%d]",
-                        service_id, msg_seqid, ctx->data.ret);
+        LOG_PRINT_DEBUG("received response for service_id[%u], msg_seqid[%u], wait_result[%d]",
+                        service_id, msg_seqid, wait_result);
 
         // Copy response data if caller provided buffer
         if (nullptr != resp_data && nullptr != resp_data_len)
@@ -215,7 +216,8 @@ int32_t connect_with_daemon()
 
     // Create a shared sync context for connection synchronization
     // This context will be used by both connect_with_daemon() and on_connect() callback
-    g_client->connect_ctx = std::make_shared<SyncContext<ipc_hv_soa_daemon_sync_context>>();
+    g_client->m_msg_seqid = 1;
+    g_client->connect_ctx = std::make_shared<SyncContext<ipc_hv_soa_sync_context>>();
     g_client->connect_ctx->Reset();
 
     hio_setcb_close(g_client->m_daemon_io, on_close);
@@ -230,16 +232,14 @@ int32_t connect_with_daemon()
     // Wait for connection to complete using the shared sync context
     // on_connect callback will call SetResult() to notify this waiting thread
     int wait_result = g_client->connect_ctx->Wait(LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
-
     if (wait_result < 0)
     {
         LOG_PRINT_ERROR("wait for daemon connection timeout, timeout[%u]ms", LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
         return IPC_HV_SOA_RET_TIMEOUT;
     }
-
-    if (g_client->connect_ctx->data.ret != IPC_HV_SOA_RET_SUCCESS)
+    if (wait_result != IPC_HV_SOA_RET_SUCCESS)
     {
-        LOG_PRINT_ERROR("daemon connection failed, ctx->data.ret[%d]", g_client->connect_ctx->data.ret);
+        LOG_PRINT_ERROR("daemon connection failed, wait_result[%d]", wait_result);
         return IPC_HV_SOA_RET_FAIL;
     }
 
@@ -275,12 +275,10 @@ int32_t connect_with_process_client(std::shared_ptr<ipc_hv_soa_process_client> c
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    std::unique_lock send_msg_lock(client->send_msg_mutex);
-
     // init
-    client->msg_seqid = 0;
-    client->msg_map.clear();
-    client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
+    client->msg_seqid = 1;
+    client->connect_ctx = std::make_shared<SyncContext<ipc_hv_soa_sync_context>>();
+    client->connect_ctx->Reset();
 
     hio_setcb_close(client->client_send_io, on_close);
     hio_setcb_connect(client->client_send_io, on_connect);
@@ -293,31 +291,22 @@ int32_t connect_with_process_client(std::shared_ptr<ipc_hv_soa_process_client> c
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    auto timeout = std::chrono::milliseconds(LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
-    bool ready = client->send_msg_cond.wait_for(send_msg_lock, timeout, [&client]
-                                                {
-                                                    return (client->send_msg_cond_ret != IPC_HV_SOA_COND_STATE_INIT);
-                                                });
-    if (!ready)
+    // Wait for connection to complete
+    int wait_result = client->connect_ctx->Wait(LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
+    if (wait_result < 0)
     {
-        ret = IPC_HV_SOA_RET_TIMEOUT;
-    }
-    else
-    {
-        if (client->send_msg_cond_ret != IPC_HV_SOA_COND_STATE_CONNECTED)
-        {
-            LOG_PRINT_ERROR("connect with daemon fail, invalid send_msg_cond_ret[%d]!", client->send_msg_cond_ret);
-            ret = IPC_HV_SOA_RET_FAIL;
-        }
-        else
-        {
-            LOG_PRINT_INFO("connected with process client[%s], it be online", client->client_name.c_str());
-            client->client_status = LOCAL_CLIENT_STATUS_ONLINE;
-        }
+        LOG_PRINT_ERROR("wait for process client connection timeout, timeout[%u]ms", LOCAL_REGISTRY_COMMUNICATION_TIMEOUT_MS);
+        return IPC_HV_SOA_RET_TIMEOUT;
     }
 
-    // clean
-    client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_INIT;
+    if (wait_result != IPC_HV_SOA_COND_STATE_CONNECTED)
+    {
+        LOG_PRINT_ERROR("connect with daemon fail, invalid result[%d]!", wait_result);
+        return IPC_HV_SOA_RET_FAIL;
+    }
+
+    LOG_PRINT_INFO("connected with process client[%s], it be online", client->client_name.c_str());
+    client->client_status = LOCAL_CLIENT_STATUS_ONLINE;
 
     return ret;
 }
@@ -410,7 +399,6 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
         send_msg_header.msg_len = (uint32_t)encoded_size;
         memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
 
-        std::lock_guard<std::mutex> send_msg_lock(dest->send_msg_mutex);
         ret = hio_write(dest->client_send_io, buffer, LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
         if (ret < 0)
         {
@@ -455,18 +443,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
 
     if (IPC_HV_SOA_RET_SUCCESS == ret)
     {
-        ipc_hv_soa_process_client_data expected_resp_data = {};
-        ipc_hv_soa_process_client_data real_resp_data = {};
-
         LOG_PRINT_DEBUG("client[%u] send service_id[%u] msg_type[%u] msg_seqid[%u] to client[%u]", client_id, service_id, E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC, msg_seqid, dest->client_id);
-        expected_resp_data.service_id = service_id;
-        expected_resp_data.msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC;
-        expected_resp_data.msg_seqid = msg_seqid;
-        expected_resp_data.client_id = 0;
-        expected_resp_data.is_complete = false;
-        expected_resp_data.data_len = 0;
-        memset(expected_resp_data.data, 0x00, sizeof(expected_resp_data.data));
-        uint64_t key = ((uint64_t)service_id << 32) | (uint64_t)msg_seqid;
 
         uint32_t msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC;
         const pb_msgdesc_t *fields = nullptr;
@@ -523,80 +500,101 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         send_msg_header.msg_len = (uint32_t)encoded_size;
         memcpy(buffer, &send_msg_header, LOCAL_REGISTRY_MSG_HEADER_SIZE);
 
-        std::unique_lock<std::mutex> send_msg_lock(dest->send_msg_mutex);
-        dest->msg_map.insert({key, expected_resp_data});
+        // Borrow a sync context from the pool using RAII
+        auto guard = dest->process_sync_pool.Borrow();
+        if (!guard.IsValid())
+        {
+            LOG_PRINT_ERROR("failed to borrow sync context from pool");
+            return IPC_HV_SOA_RET_FAIL;
+        }
+        auto ctx = guard.get();
+
+        // Initialize context data
+        ctx->data.header.client_id = 0;
+        ctx->data.header.msg_seqid = msg_seqid;
+        ctx->data.header.msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC;
+        ctx->data.header.service_id = service_id;
+        ctx->data.header.msg_len = 0;
+        memset(ctx->data.data, 0x00, sizeof(ctx->data.data));
+        ctx->result = -1;
+
+        // Store context in pending_requests map for later completion
+        {
+            std::lock_guard<std::mutex> lock(dest->pending_requests_mutex);
+            dest->pending_requests[msg_seqid] = guard.get_shared_ptr();
+        }
+
+        // Send message
         ret = hio_write(dest->client_send_io, buffer, LOCAL_REGISTRY_MSG_HEADER_SIZE + encoded_size);
         if (ret < 0)
         {
             LOG_PRINT_ERROR("hio_write fail, ret[%d], error[%d]", ret, hio_error(dest->client_send_io));
             ret = IPC_HV_SOA_RET_FAIL;
+
+            // Remove from pending_requests on error
+            {
+                std::lock_guard<std::mutex> lock(dest->pending_requests_mutex);
+                dest->pending_requests.erase(msg_seqid);
+            }
         }
         else
         {
             ret = IPC_HV_SOA_RET_SUCCESS;
-            // init
-            auto timeout = std::chrono::milliseconds(timeout_ms);
-            dest->send_msg_cond_ret = -1;
-            do
-            {
-                bool ready = dest->send_msg_cond.wait_for(send_msg_lock, timeout, [&dest]
-                                                          {
-                                                              return (dest->send_msg_cond_ret != -1);
-                                                          });
-                if (!ready)
-                {
-                    ret = IPC_HV_SOA_RET_TIMEOUT;
-                    break;
-                }
+            // Wait for response with timeout
+            int wait_result = ctx->Wait(timeout_ms);
 
-                auto it = dest->msg_map.find(key);
-                if (it != dest->msg_map.end())
-                {
-                    real_resp_data = it->second;
-                    if (real_resp_data.is_complete)
-                    {
-                        ret = IPC_HV_SOA_RET_SUCCESS;
-                    }
-                    else
-                    {
-                        ret = IPC_HV_SOA_RET_ERR_OTHER;
-                    }
-                }
-                else
-                {
-                    ret = IPC_HV_SOA_RET_FAIL;
-                }
-                break;
-            } while (1);
-
-            if (IPC_HV_SOA_RET_SUCCESS == ret)
+            if (wait_result < 0)
             {
+                LOG_PRINT_ERROR("wait response timeout for service_id[%u], msg_seqid[%u], timeout[%u]ms", service_id, msg_seqid, timeout_ms);
+                ret = IPC_HV_SOA_RET_TIMEOUT;
+            }
+            else if (wait_result != IPC_HV_SOA_RET_SUCCESS)
+            {
+                LOG_PRINT_ERROR("response failed, ctx->result[%d], service_id[%u], msg_seqid[%u]", ctx->result, service_id, msg_seqid);
+                ret = IPC_HV_SOA_RET_FAIL;
+            }
+            else if (ctx->data.header.service_id != service_id)
+            {
+                LOG_PRINT_ERROR("response service_id mismatch, expected[%u], got[%u], msg_seqid[%u]",
+                                service_id, ctx->data.header.service_id, msg_seqid);
+                ret = IPC_HV_SOA_RET_FAIL;
+            }
+            else
+            {
+                // Successfully received response
+                LOG_PRINT_DEBUG("received response for service_id[%u], msg_seqid[%u], ctx->result[%d]",
+                                service_id, msg_seqid, ctx->result);
+
+                // Copy response data if caller provided buffer
                 if (nullptr != method_resp_data && nullptr != method_resp_data_len)
                 {
-                    if (*method_resp_data_len < real_resp_data.data_len)
+                    if (*method_resp_data_len < ctx->data.header.msg_len)
                     {
                         ret = IPC_HV_SOA_RET_ERR_ARG;
                     }
                     else
                     {
-                        if (real_resp_data.data_len > 0)
+                        if (ctx->data.header.msg_len > 0)
                         {
-                            memcpy(method_resp_data, real_resp_data.data, real_resp_data.data_len);
+                            memcpy(method_resp_data, ctx->data.data, ctx->data.header.msg_len);
                         }
                     }
                 }
 
                 if (nullptr != method_resp_data_len)
                 {
-                    *method_resp_data_len = real_resp_data.data_len;
+                    *method_resp_data_len = ctx->data.header.msg_len;
                 }
+
+                ret = IPC_HV_SOA_RET_SUCCESS;
             }
-            else
+
+            // Remove from pending_requests after completion
             {
-                LOG_PRINT_ERROR("ipc_hv_soa_method_sync[%u] fail, ret[%d]", service_id, ret);
+                std::lock_guard<std::mutex> lock(dest->pending_requests_mutex);
+                dest->pending_requests.erase(msg_seqid);
             }
         }
-        dest->msg_map.erase(key);
     }
     else
     {
@@ -660,34 +658,34 @@ void process_msg_handler(void)
 {
     while (1)
     {
-        ipc_hv_soa_process_client_data recv_data = {};
+        ipc_hv_soa_sync_context recv_data = {};
         if (!g_client->msg_handler_queue.Pop(recv_data))
         {
             break;
         }
 
         ipc_hv_soa_msg_handle_t handle = {};
-        handle.client_id = recv_data.client_id;
-        handle.msg_type = recv_data.msg_type;
-        handle.msg_seqid = recv_data.msg_seqid;
+        handle.client_id = recv_data.header.client_id;
+        handle.msg_type = recv_data.header.msg_type;
+        handle.msg_seqid = recv_data.header.msg_seqid;
 
-        switch (recv_data.msg_type)
+        switch (recv_data.header.msg_type)
         {
             case E_IPC_HV_SOA_MSG_TYPE_METHOD_NOTIFY:
             case E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC:
             case E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_ASYNC:
                 {
-                    auto it = find_service(recv_data.service_id);
+                    auto it = find_service(recv_data.header.service_id);
                     if (it == nullptr)
                     {
-                        LOG_PRINT_ERROR("not find service_id[%u]", recv_data.service_id);
+                        LOG_PRINT_ERROR("not find service_id[%u]", recv_data.header.service_id);
                         break;
                     }
 
                     PF_IPC_HV_SOA_METHOD_PROVIDER_CB cb = (PF_IPC_HV_SOA_METHOD_PROVIDER_CB)it->service_handler;
                     if (nullptr != cb)
                     {
-                        cb(handle, recv_data.service_id, recv_data.data, recv_data.data_len);
+                        cb(handle, recv_data.header.service_id, recv_data.data, recv_data.header.msg_len);
                     }
                 }
                 break;
@@ -695,37 +693,37 @@ void process_msg_handler(void)
                 break;
             case E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_ASYNC:
                 {
-                    auto it = find_service(recv_data.service_id);
+                    auto it = find_service(recv_data.header.service_id);
                     if (it == nullptr)
                     {
-                        LOG_PRINT_ERROR("not find service_id[%u]", recv_data.service_id);
+                        LOG_PRINT_ERROR("not find service_id[%u]", recv_data.header.service_id);
                         break;
                     }
                     PF_IPC_HV_SOA_METHOD_ASYNC_CB cb = (PF_IPC_HV_SOA_METHOD_ASYNC_CB)it->service_async_handler;
                     if (nullptr != cb)
                     {
-                        cb(recv_data.service_id, recv_data.data, recv_data.data_len);
+                        cb(recv_data.header.service_id, recv_data.data, recv_data.header.msg_len);
                     }
                 }
                 break;
             case E_IPC_HV_SOA_MSG_TYPE_EVENT_NOTIFY:
                 {
-                    auto it = find_service(recv_data.service_id);
+                    auto it = find_service(recv_data.header.service_id);
                     if (it == nullptr)
                     {
-                        LOG_PRINT_ERROR("not find service_id[%u]", recv_data.service_id);
+                        LOG_PRINT_ERROR("not find service_id[%u]", recv_data.header.service_id);
                         break;
                     }
 
                     PF_IPC_HV_SOA_EVENT_LISTENER_CB cb = (PF_IPC_HV_SOA_EVENT_LISTENER_CB)it->service_handler;
                     if (nullptr != cb)
                     {
-                        cb(recv_data.service_id, recv_data.data, recv_data.data_len);
+                        cb(recv_data.header.service_id, recv_data.data, recv_data.header.msg_len);
                     }
                 }
                 break;
             default:
-                LOG_PRINT_ERROR("invalid msg_type[%u]", recv_data.msg_type);
+                LOG_PRINT_ERROR("invalid msg_type[%u]", recv_data.header.msg_type);
                 break;
         }
     }
@@ -769,7 +767,7 @@ int32_t ipc_hv_soa_inn_trigger_to_client(std::shared_ptr<ipc_hv_soa_service> ser
     return ret;
 }
 
-int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_seqid, void *method_resp_data, uint32_t method_resp_data_len)
+int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_type, uint32_t msg_seqid, void *method_resp_data, uint32_t method_resp_data_len)
 {
     if (!g_init_flag)
     {
@@ -785,40 +783,53 @@ int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_seqid, vo
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
-    std::unique_lock<std::mutex> send_msg_lock(it->service_provider->send_msg_mutex);
-    bool getsync = false;
-
-    uint64_t key = ((uint64_t)service_id << 32) | (uint64_t)msg_seqid;
-    auto it1 = it->service_provider->msg_map.find(key);
-    if (it1 != it->service_provider->msg_map.end())
+    // Find the service provider (the client that sent the request)
+    std::shared_ptr<ipc_hv_soa_process_client> provider = it->service_provider;
+    if (nullptr == provider)
     {
-        getsync = true;
-    }
-    else
-    {
-        getsync = false;
+        LOG_PRINT_ERROR("service[%u] has no provider", service_id);
+        return IPC_HV_SOA_RET_ERR_ARG;
     }
 
-    if (getsync)
+    // Search for the waiting context in pending_requests by msg_seqid
+    std::shared_ptr<SyncContext<ipc_hv_soa_sync_context>> ctx_ptr = nullptr;
     {
-        it1->second.is_complete = true;
-        it1->second.data_len = method_resp_data_len;
-        if (method_resp_data_len > 0)
+        std::lock_guard<std::mutex> lock(provider->pending_requests_mutex);
+        auto ctx_it = provider->pending_requests.find(msg_seqid);
+        if (ctx_it == provider->pending_requests.end())
         {
-            memcpy(it1->second.data, method_resp_data, method_resp_data_len);
+            LOG_PRINT_ERROR("no waiting context found for msg_seqid[%u] on client[%u]", msg_seqid, provider->client_id);
+            return IPC_HV_SOA_RET_FAIL;
         }
-        else
-        {
-            memset(it1->second.data, 0x00, sizeof(it1->second.data));
-        }
-        it->service_provider->send_msg_cond_ret = 0;
-        it->service_provider->send_msg_cond.notify_one();
+        ctx_ptr = ctx_it->second;
+        // Remove from pending_requests after finding
+        provider->pending_requests.erase(ctx_it);
     }
-    else
+
+    if (nullptr == ctx_ptr)
     {
-        LOG_PRINT_ERROR("invalid service[%u]", service_id);
-        ret = IPC_HV_SOA_RET_ERR_ARG;
+        LOG_PRINT_ERROR("context pointer is null for msg_seqid[%u]", msg_seqid);
+        return IPC_HV_SOA_RET_FAIL;
     }
+
+    // Lock the context and set the response data
+    {
+        std::lock_guard<std::mutex> lock(ctx_ptr->mutex);
+        ctx_ptr->data.header.client_id = g_client->client_id;
+        ctx_ptr->data.header.msg_seqid = msg_seqid;
+        ctx_ptr->data.header.msg_type = msg_type + 1;
+        ctx_ptr->data.header.service_id = service_id;
+        ctx_ptr->data.header.msg_len = method_resp_data_len;
+        if (nullptr != method_resp_data && method_resp_data_len > 0)
+        {
+            memcpy(ctx_ptr->data.data, method_resp_data, method_resp_data_len);
+        }
+    }
+
+    // Set result to wake up the waiting thread
+    ctx_ptr->SetResult(0);
+
+    LOG_PRINT_DEBUG("completed sync request for service_id[%u], msg_seqid[%u]", service_id, msg_seqid);
 
     return ret;
 }

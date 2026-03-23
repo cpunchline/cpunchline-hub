@@ -29,8 +29,7 @@ void on_close(hio_t *io)
                 auto ctx = pair.second;
                 if (ctx)
                 {
-                    ctx->data.ret = IPC_HV_SOA_RET_FAIL;
-                    ctx->SetResult(IPC_HV_SOA_RET_FAIL);
+                    ctx->SetResult(IPC_HV_SOA_COND_STATE_DISCONNECTED);
                 }
             }
             g_client->pending_requests.clear();
@@ -64,13 +63,23 @@ void on_close(hio_t *io)
             if ((nullptr != client->client_send_io && hio_id(io) == hio_id(client->client_send_io)))
             {
                 LOG_PRINT_ERROR("disconnect with process client[%s] not send!", client->client_name.c_str());
-                std::unique_lock<std::mutex> send_msg_lock(client->send_msg_mutex);
-                client->msg_seqid = 0;
-                client->msg_map.clear();
-                client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_CONNECTED;
-                client->client_send_io = nullptr;
-                client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
-                client->send_msg_cond.notify_all();
+
+                // 处理 process 连接断开
+                {
+                    std::lock_guard<std::mutex> process_lock(client->pending_requests_mutex);
+                    // 通知所有待响应的请求连接已断开
+                    for (auto &pair : client->pending_requests)
+                    {
+                        auto ctx = pair.second;
+                        if (ctx)
+                        {
+                            ctx->SetResult(IPC_HV_SOA_COND_STATE_DISCONNECTED);
+                        }
+                    }
+                    g_client->pending_requests.clear();
+                    client->client_send_io = nullptr;
+                    client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
+                }
             }
             else if ((nullptr != client->client_recv_io && hio_id(io) == hio_id(client->client_recv_io)))
             {
@@ -317,9 +326,22 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
         auto ctx = it->second;
         if (ctx)
         {
-            ctx->data.msgid = recv_msg_header->service_id;
-            memcpy(ctx->data.data, pstruct, fields_size);
-            ctx->data.ret = ret;
+            ctx->data.header.client_id = recv_msg_header->client_id;
+            ctx->data.header.msg_seqid = recv_msg_header->msg_seqid;
+            ctx->data.header.msg_type = recv_msg_header->msg_type;
+            ctx->data.header.service_id = recv_msg_header->service_id;
+            ctx->data.header.msg_len = fields_size;
+            if (recv_msg_header->msg_len > 0)
+            {
+                ctx->data.header.msg_len = fields_size;
+                memcpy(ctx->data.data, pstruct, fields_size);
+            }
+            else
+            {
+                ctx->data.header.msg_len = 0;
+                memset(ctx->data.data, 0x00, sizeof(ctx->data.data));
+            }
+
             // 通过 promise/future 机制通知等待的线程
             ctx->SetResult(ret);
         }
@@ -402,27 +424,26 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
 
     if (recv_msg_header->msg_type != E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC)
     {
-        ipc_hv_soa_process_client_data client_data = {};
-        client_data.service_id = recv_msg_header->service_id;
-        client_data.msg_type = recv_msg_header->msg_type;
-        client_data.msg_seqid = recv_msg_header->msg_seqid;
-        client_data.client_id = recv_msg_header->client_id;
-
+        ipc_hv_soa_sync_context process_sync_context = {};
+        process_sync_context.header.client_id = recv_msg_header->client_id;
+        process_sync_context.header.msg_seqid = recv_msg_header->msg_seqid;
+        process_sync_context.header.msg_type = recv_msg_header->msg_type;
+        process_sync_context.header.service_id = recv_msg_header->service_id;
         if (recv_msg_header->msg_len > 0)
         {
-            client_data.data_len = fields_size;
-            memcpy(client_data.data, pstruct, fields_size);
+            process_sync_context.header.msg_len = fields_size;
+            memcpy(process_sync_context.data, pstruct, fields_size);
         }
         else
         {
-            client_data.data_len = 0;
-            memset(client_data.data, 0x00, sizeof(client_data.data));
+            process_sync_context.header.msg_len = 0;
+            memset(process_sync_context.data, 0x00, sizeof(process_sync_context.data));
         }
-        g_client->msg_handler_queue.Push(client_data);
+        g_client->msg_handler_queue.Push(process_sync_context);
     }
     else
     {
-        ipc_hv_soa_inn_sync_complete(recv_msg_header->service_id, recv_msg_header->msg_seqid, pstruct, recv_msg_header->msg_len);
+        ipc_hv_soa_inn_sync_complete(recv_msg_header->service_id, recv_msg_header->msg_type, recv_msg_header->msg_seqid, pstruct, recv_msg_header->msg_len);
     }
 }
 
@@ -469,8 +490,7 @@ void on_connect(hio_t *io)
             // 使用 connect_ctx 的 SetResult 来通知 connect_with_daemon() 中的等待线程
             if (g_client->connect_ctx)
             {
-                g_client->connect_ctx->data.ret = IPC_HV_SOA_RET_SUCCESS;
-                g_client->connect_ctx->SetResult(IPC_HV_SOA_RET_SUCCESS);
+                g_client->connect_ctx->SetResult(IPC_HV_SOA_COND_STATE_CONNECTED);
             }
         }
         else
@@ -486,11 +506,20 @@ void on_connect(hio_t *io)
                 if (nullptr != client->client_send_io && hio_id(io) == hio_id(client->client_send_io))
                 {
                     LOG_PRINT_INFO("connected with process client[%s]!", client->client_name.c_str());
-                    std::unique_lock<std::mutex> send_msg_lock(client->send_msg_mutex);
-                    client->msg_seqid = 0;
-                    client->msg_map.clear();
-                    client->send_msg_cond_ret = IPC_HV_SOA_COND_STATE_CONNECTED;
-                    client->send_msg_cond.notify_one();
+
+                    // 连接成功,设置 client_status 为 ONLINE
+                    client->client_status = LOCAL_CLIENT_STATUS_ONLINE;
+                    // 连接成功,清除待响应请求
+                    {
+                        std::lock_guard<std::mutex> process_lock(client->pending_requests_mutex);
+                        client->pending_requests.clear();
+                    }
+                    // 通知等待连接的线程(如果存在)
+                    // 使用 connect_ctx 的 SetResult 来通知 connect_with_daemon() 中的等待线程
+                    if (client->connect_ctx)
+                    {
+                        client->connect_ctx->SetResult(IPC_HV_SOA_COND_STATE_CONNECTED);
+                    }
                 }
             }
         }
