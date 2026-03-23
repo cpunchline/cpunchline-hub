@@ -27,7 +27,6 @@
 #define LOCAL_REGISTRY_MSG_SIZE_MAX (8 * 1024) // 8 K
 #endif
 
-const constexpr std::size_t LOCAL_REGISTRY_DAEMON_HV_LOOP_NUM_MAX = 0;
 const constexpr std::size_t LOCAL_REGISTRY_CLIENT_HV_LOOP_NUM_MAX = 1;
 const constexpr std::size_t LOCAL_REGISTRY_MSG_HEADER_SIZE = sizeof(st_local_msg_header); // client_id, msg_seqid, msg_type, service_id, msgdata_len
 
