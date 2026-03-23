@@ -313,7 +313,7 @@ int32_t ipc_hv_soa_provider_service_offer(ipc_hv_soa_provider_service_t *provide
         }
         else
         {
-            LOG_PRINT_ERROR("service_type[%d] not support", provider_services[i].service_type);
+            LOG_PRINT_ERROR("service_type[%u] not support", provider_services[i].service_type);
             return IPC_HV_SOA_RET_ERR_ARG;
         }
     }
@@ -366,7 +366,7 @@ int32_t ipc_hv_soa_provider_service_revoke(uint32_t *provider_services, uint32_t
             auto it = find_service(provider_services[i]);
             if (nullptr == it)
             {
-                LOG_PRINT_ERROR("service[%d] not find", provider_services[i]);
+                LOG_PRINT_ERROR("service[%u] not find", provider_services[i]);
                 return IPC_HV_SOA_RET_FAIL;
             }
 
@@ -465,7 +465,7 @@ int32_t ipc_hv_soa_listener_service_subscribe(ipc_hv_soa_listener_service_t *lis
     auto it = find_process_client(g_client->client_id);
     if (nullptr == it)
     {
-        LOG_PRINT_ERROR("client[%d] not register", g_client->client_id);
+        LOG_PRINT_ERROR("client[%u] not register", g_client->client_id);
         return IPC_HV_SOA_RET_FAIL;
     }
 
@@ -489,7 +489,7 @@ int32_t ipc_hv_soa_listener_service_subscribe(ipc_hv_soa_listener_service_t *lis
         }
         else
         {
-            LOG_PRINT_ERROR("service_type[%d] not support", listener_services[i].service_type);
+            LOG_PRINT_ERROR("service_type[%u] not support", listener_services[i].service_type);
             return IPC_HV_SOA_RET_ERR_ARG;
         }
     }
@@ -539,7 +539,7 @@ int32_t ipc_hv_soa_listener_service_unsubscribe(uint32_t *listener_services, uin
         auto it = find_service(listener_services[i]);
         if (nullptr == it)
         {
-            LOG_PRINT_ERROR("service[%d] not find", listener_services[i]);
+            LOG_PRINT_ERROR("service[%u] not find", listener_services[i]);
             return IPC_HV_SOA_RET_FAIL;
         }
         unsubscribe.listen_services[i].service_id = it->service_id;
@@ -583,19 +583,19 @@ int32_t ipc_hv_soa_method_notify(uint32_t service_id, void *method_req_data, uin
     auto it = get_service(service_id);
     if (nullptr == it)
     {
-        LOG_PRINT_ERROR("service[%d] not find", service_id);
+        LOG_PRINT_ERROR("service[%u] not find", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (nullptr == it->service_provider)
     {
-        LOG_PRINT_ERROR("service[%d] is no provider", service_id);
+        LOG_PRINT_ERROR("service[%u] is no provider", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (it->service_type != E_IPC_HV_SOA_SERVICE_TYPE_METHOD || it->service_status != LOCAL_SERVICE_STATUS_AVAILABLE)
     {
-        LOG_PRINT_ERROR("invalid service[%d]", service_id);
+        LOG_PRINT_ERROR("invalid service[%u]", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
@@ -611,7 +611,7 @@ int32_t ipc_hv_soa_method_notify(uint32_t service_id, void *method_req_data, uin
 
     if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
-        LOG_PRINT_ERROR("ipc_hv_soa_method_notify[%d] fail", service_id);
+        LOG_PRINT_ERROR("ipc_hv_soa_method_notify[%u] fail", service_id);
     }
 
     return ret;
@@ -629,19 +629,19 @@ int32_t ipc_hv_soa_method_sync(uint32_t service_id, void *method_req_data, uint3
     auto it = get_service(service_id);
     if (nullptr == it)
     {
-        LOG_PRINT_ERROR("service[%d] not find", service_id);
+        LOG_PRINT_ERROR("service[%u] not find", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (nullptr == it->service_provider)
     {
-        LOG_PRINT_ERROR("service[%d] is no provider", service_id);
+        LOG_PRINT_ERROR("service[%u] is no provider", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (it->service_type != E_IPC_HV_SOA_SERVICE_TYPE_METHOD || it->service_status != LOCAL_SERVICE_STATUS_AVAILABLE)
     {
-        LOG_PRINT_ERROR("invalid service[%d]", service_id);
+        LOG_PRINT_ERROR("invalid service[%u]", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
@@ -670,19 +670,19 @@ int32_t ipc_hv_soa_method_async(uint32_t service_id, void *method_req_data, uint
     auto it = get_service(service_id);
     if (nullptr == it)
     {
-        LOG_PRINT_ERROR("service[%d] not find", service_id);
+        LOG_PRINT_ERROR("service[%u] not find", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (nullptr == it->service_provider)
     {
-        LOG_PRINT_ERROR("service[%d] is no provider", service_id);
+        LOG_PRINT_ERROR("service[%u] is no provider", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (it->service_type != E_IPC_HV_SOA_SERVICE_TYPE_METHOD || it->service_status != LOCAL_SERVICE_STATUS_AVAILABLE)
     {
-        LOG_PRINT_ERROR("invalid service[%d]", service_id);
+        LOG_PRINT_ERROR("invalid service[%u]", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
@@ -699,7 +699,7 @@ int32_t ipc_hv_soa_method_async(uint32_t service_id, void *method_req_data, uint
 
     if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
-        LOG_PRINT_ERROR("send_msg_to_process[%d] fail", service_id);
+        LOG_PRINT_ERROR("send_msg_to_process[%u] fail", service_id);
     }
 
     return ret;
@@ -725,21 +725,21 @@ int32_t ipc_hv_soa_method_complete(ipc_hv_soa_msg_handle_t handle, uint32_t serv
     }
     else
     {
-        LOG_PRINT_ERROR("invalid msg[%d]", handle.msg_type);
+        LOG_PRINT_ERROR("invalid msg[%u]", handle.msg_type);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     auto it = get_process_client(handle.client_id);
     if (nullptr == it)
     {
-        LOG_PRINT_ERROR("invalid client[%d]", handle.client_id);
+        LOG_PRINT_ERROR("invalid client[%u]", handle.client_id);
         return IPC_HV_SOA_RET_FAIL;
     }
 
     auto it1 = get_service(service_id);
     if (nullptr == it1)
     {
-        LOG_PRINT_ERROR("service[%d] not find", service_id);
+        LOG_PRINT_ERROR("service[%u] not find", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
@@ -754,7 +754,7 @@ int32_t ipc_hv_soa_method_complete(ipc_hv_soa_msg_handle_t handle, uint32_t serv
 
     if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
-        LOG_PRINT_ERROR("ipc_hv_soa_method_complete[%d] fail", service_id);
+        LOG_PRINT_ERROR("ipc_hv_soa_method_complete[%u] fail", service_id);
     }
 
     return ret;
@@ -772,19 +772,19 @@ int32_t ipc_hv_soa_event_trigger(uint32_t service_id, void *event_data, uint32_t
     auto it = get_service(service_id);
     if (nullptr == it)
     {
-        LOG_PRINT_ERROR("service[%d] not find", service_id);
+        LOG_PRINT_ERROR("service[%u] not find", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (nullptr == it->service_provider)
     {
-        LOG_PRINT_ERROR("service[%d] is no provider", service_id);
+        LOG_PRINT_ERROR("service[%u] is no provider", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
     if (it->service_type != E_IPC_HV_SOA_SERVICE_TYPE_EVENT || it->service_status != LOCAL_SERVICE_STATUS_AVAILABLE)
     {
-        LOG_PRINT_ERROR("invalid service[%d]", service_id);
+        LOG_PRINT_ERROR("invalid service[%u]", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
@@ -802,7 +802,7 @@ int32_t ipc_hv_soa_event_trigger(uint32_t service_id, void *event_data, uint32_t
 
         if (IPC_HV_SOA_RET_SUCCESS != ret)
         {
-            LOG_PRINT_ERROR("ipc_hv_soa_event_trigger[%d] fail", service_id);
+            LOG_PRINT_ERROR("ipc_hv_soa_event_trigger[%u] fail", service_id);
         }
     }
 

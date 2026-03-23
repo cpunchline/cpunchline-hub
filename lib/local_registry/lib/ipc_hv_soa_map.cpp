@@ -56,7 +56,7 @@ std::shared_ptr<ipc_hv_soa_process_client> find_process_client(uint32_t client_i
 
     if (g_client->process_clients_map.end() == it || it->second == nullptr)
     {
-        LOG_PRINT_ERROR("client[%d] not found", client_id);
+        LOG_PRINT_ERROR("client[%u] not found", client_id);
         return nullptr;
     }
 
@@ -188,7 +188,7 @@ std::shared_ptr<ipc_hv_soa_service> save_service(uint32_t service_id, uint32_t s
         service_item = std::make_shared<ipc_hv_soa_service>();
         service_item->service_id = service_id;
         service_item->service_type = service_type;
-        service_item->service_status = (nullptr == client) ? LOCAL_SERVICE_STATUS_DEFAULT : service_status;
+        service_item->service_status = (nullptr == client) ? (uint32_t)LOCAL_SERVICE_STATUS_DEFAULT : service_status;
         service_item->service_handler = service_handler;
         service_item->service_async_handler = service_async_handler;
         service_item->service_provider = nullptr;

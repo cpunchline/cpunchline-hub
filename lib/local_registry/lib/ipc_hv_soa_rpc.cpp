@@ -20,14 +20,14 @@ static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_ty
         return IPC_HV_SOA_RET_FAIL;
     }
 
-    LOG_PRINT_DEBUG("send service_id[%d] to daemon fd[%d]", service_id, hio_fd(g_client->m_daemon_io));
+    LOG_PRINT_DEBUG("send service_id[%u] to daemon fd[%d]", service_id, hio_fd(g_client->m_daemon_io));
 
     size_t encoded_size = 0;
     if (nullptr != msgdata && field_size > 0)
     {
         if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
         {
-            LOG_PRINT_ERROR("pb_get_encoded_size service_id[%d] fail!", service_id);
+            LOG_PRINT_ERROR("pb_get_encoded_size service_id[%u] fail!", service_id);
             return -1;
         }
     }
@@ -50,7 +50,7 @@ static int32_t _send_msg_to_daemon_internal(uint32_t service_id, uint32_t msg_ty
     }
     else
     {
-        LOG_PRINT_DEBUG("pb_encode service_id[%u] success(no need)");
+        LOG_PRINT_DEBUG("pb_encode service_id[%u] success(no need)", service_id);
     }
 
     st_local_msg_header send_msg_header = {};
@@ -127,25 +127,25 @@ int32_t send_msg_to_daemon_sync(uint32_t service_id, uint32_t msg_type, const vo
 
     if (!ready)
     {
-        LOG_PRINT_ERROR("wait response timeout for service_id[%d], timeout[%u]ms", service_id, timeout_ms);
+        LOG_PRINT_ERROR("wait response timeout for service_id[%u], timeout[%u]ms", service_id, timeout_ms);
         ret = IPC_HV_SOA_RET_TIMEOUT;
     }
     else if (g_client->daemon_cond_ret != IPC_HV_SOA_COND_STATE_SUCCESS)
     {
-        LOG_PRINT_ERROR("daemon processing failed, daemon_cond_ret[%d], service_id[%d]",
+        LOG_PRINT_ERROR("daemon processing failed, daemon_cond_ret[%d], service_id[%u]",
                         g_client->daemon_cond_ret, service_id);
         ret = IPC_HV_SOA_RET_FAIL;
     }
     else if (g_client->daemon_cond_msgid != service_id)
     {
-        LOG_PRINT_ERROR("response service_id mismatch, expected[%d], got[%d]",
+        LOG_PRINT_ERROR("response service_id mismatch, expected[%u], got[%u]",
                         service_id, g_client->daemon_cond_msgid);
         ret = IPC_HV_SOA_RET_FAIL;
     }
     else
     {
         // Successfully received response
-        LOG_PRINT_DEBUG("received response for service_id[%d], daemon_cond_ret[%d]",
+        LOG_PRINT_DEBUG("received response for service_id[%u], daemon_cond_ret[%d]",
                         service_id, g_client->daemon_cond_ret);
 
         // Copy response data if caller provided buffer
@@ -335,14 +335,14 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
     {
         if (nullptr == dest->client_send_io || !hio_is_opened(dest->client_send_io))
         {
-            LOG_PRINT_ERROR("process client[%d][%p]is online but disconnect!", dest->client_id, dest->client_send_io);
+            LOG_PRINT_ERROR("process client[%u][%p]is online but disconnect!", dest->client_id, dest->client_send_io);
             ret = connect_with_process_client(dest);
         }
     }
 
     if (IPC_HV_SOA_RET_SUCCESS == ret)
     {
-        LOG_PRINT_DEBUG("client[%d] send service_id[%d] msg_type[%d] msg_seqid[%d] to client[%d]", client_id, service_id, msg_type, msg_seqid, dest->client_id);
+        LOG_PRINT_DEBUG("client[%u] send service_id[%u] msg_type[%u] msg_seqid[%u] to client[%u]", client_id, service_id, msg_type, msg_seqid, dest->client_id);
 
         const pb_msgdesc_t *fields = nullptr;
         uint16_t module_id = (uint16_t)(service_id >> 16);
@@ -375,7 +375,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
         {
             if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
             {
-                LOG_PRINT_ERROR("pb_get_encoded_size service_id[%d] fail!", service_id);
+                LOG_PRINT_ERROR("pb_get_encoded_size service_id[%u] fail!", service_id);
                 return IPC_HV_SOA_RET_FAIL;
             }
         }
@@ -419,7 +419,7 @@ int32_t send_msg_to_process(std::shared_ptr<ipc_hv_soa_process_client> dest, uin
     }
     else
     {
-        LOG_PRINT_ERROR("connect with client[%d] fail!", dest->client_id);
+        LOG_PRINT_ERROR("connect with client[%u] fail!", dest->client_id);
     }
 
     return ret;
@@ -443,7 +443,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
     {
         if (nullptr == dest->client_send_io || !hio_is_opened(dest->client_send_io))
         {
-            LOG_PRINT_ERROR("process client[%d][%p]is online but disconnect!", dest->client_id, dest->client_send_io);
+            LOG_PRINT_ERROR("process client[%u][%p]is online but disconnect!", dest->client_id, dest->client_send_io);
             ret = connect_with_process_client(dest);
         }
     }
@@ -453,7 +453,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         ipc_hv_soa_process_client_data expected_resp_data = {};
         ipc_hv_soa_process_client_data real_resp_data = {};
 
-        LOG_PRINT_DEBUG("client[%d] send service_id[%d] msg_type[%d] msg_seqid[%d] to client[%d]", client_id, service_id, E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC, msg_seqid, dest->client_id);
+        LOG_PRINT_DEBUG("client[%u] send service_id[%u] msg_type[%u] msg_seqid[%u] to client[%u]", client_id, service_id, E_IPC_HV_SOA_MSG_TYPE_METHOD_REQUEST_SYNC, msg_seqid, dest->client_id);
         expected_resp_data.service_id = service_id;
         expected_resp_data.msg_type = E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC;
         expected_resp_data.msg_seqid = msg_seqid;
@@ -488,7 +488,7 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
         {
             if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
             {
-                LOG_PRINT_ERROR("pb_get_encoded_size service_id[%d] fail!", service_id);
+                LOG_PRINT_ERROR("pb_get_encoded_size service_id[%u] fail!", service_id);
                 return IPC_HV_SOA_RET_FAIL;
             }
         }
@@ -588,14 +588,14 @@ int32_t send_msg_to_process_sync(std::shared_ptr<ipc_hv_soa_process_client> dest
             }
             else
             {
-                LOG_PRINT_ERROR("ipc_hv_soa_method_sync[%d] fail, ret[%d]", service_id, ret);
+                LOG_PRINT_ERROR("ipc_hv_soa_method_sync[%u] fail, ret[%d]", service_id, ret);
             }
         }
         dest->send_msg_map.erase(key);
     }
     else
     {
-        LOG_PRINT_ERROR("connect with client[%d] fail!", dest->client_id);
+        LOG_PRINT_ERROR("connect with client[%u] fail!", dest->client_id);
     }
 
     return ret;
@@ -639,14 +639,14 @@ int32_t register_client_req()
     // Validate response
     if (resp.client_pid != g_client->client_pid)
     {
-        LOG_PRINT_ERROR("register client_id fail, client_pid[%d] != resp.client_pid[%d]",
-                        g_client->client_pid, resp.client_pid);
+        LOG_PRINT_ERROR("register client_id fail, client_pid[%" PRIdMAX "] != resp.client_pid[%d]",
+                        (intmax_t)g_client->client_pid, resp.client_pid);
         return IPC_HV_SOA_RET_FAIL;
     }
 
     g_client->client_id = resp.client_id;
-    LOG_PRINT_INFO("register client success, client_id[%u], client_pid[%u]",
-                   g_client->client_id, g_client->client_pid);
+    LOG_PRINT_INFO("register client success, client_id[%u], client_pid[%" PRIdMAX "]",
+                   g_client->client_id, (intmax_t)g_client->client_pid);
 
     return IPC_HV_SOA_RET_SUCCESS;
 }
@@ -742,7 +742,7 @@ int32_t ipc_hv_soa_inn_trigger_to_client(std::shared_ptr<ipc_hv_soa_service> ser
 
     if (nullptr == service->service_provider)
     {
-        LOG_PRINT_ERROR("service[%d] is no provider", service->service_id);
+        LOG_PRINT_ERROR("service[%u] is no provider", service->service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
@@ -758,7 +758,7 @@ int32_t ipc_hv_soa_inn_trigger_to_client(std::shared_ptr<ipc_hv_soa_service> ser
 
     if (IPC_HV_SOA_RET_SUCCESS != ret)
     {
-        LOG_PRINT_ERROR("ipc_hv_soa_inn_trigger_to_client[%d] fail", service->service_id);
+        LOG_PRINT_ERROR("ipc_hv_soa_inn_trigger_to_client[%u] fail", service->service_id);
     }
 
     return ret;
@@ -776,7 +776,7 @@ int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_seqid, vo
     auto it = find_service(service_id);
     if (nullptr == it)
     {
-        LOG_PRINT_ERROR("service[%d] not find", service_id);
+        LOG_PRINT_ERROR("service[%u] not find", service_id);
         return IPC_HV_SOA_RET_ERR_ARG;
     }
 
@@ -811,7 +811,7 @@ int32_t ipc_hv_soa_inn_sync_complete(uint32_t service_id, uint32_t msg_seqid, vo
     }
     else
     {
-        LOG_PRINT_ERROR("invalid service[%d]", service_id);
+        LOG_PRINT_ERROR("invalid service[%u]", service_id);
         ret = IPC_HV_SOA_RET_ERR_ARG;
     }
 

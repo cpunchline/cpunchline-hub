@@ -49,7 +49,7 @@ int32_t ipc_hv_soa_timer_create(uint32_t timer_id, uint32_t repeat, uint32_t int
     std::lock_guard<std::mutex> m_timers_map_lock(g_client->m_timers_map_mutex);
     if (g_client->m_timers_map.find(timer_id) != g_client->m_timers_map.end())
     {
-        LOG_PRINT_ERROR("timer[%d] already exist", timer_id);
+        LOG_PRINT_ERROR("timer[%u] already exist", timer_id);
         return IPC_HV_SOA_RET_ERR_EXISTS;
     }
 
@@ -76,7 +76,7 @@ int32_t ipc_hv_soa_timer_reset(uint32_t timer_id, uint32_t interval_ms)
     auto it = g_client->m_timers_map.find(timer_id);
     if (it == g_client->m_timers_map.end())
     {
-        LOG_PRINT_ERROR("timer[%d] not exist", timer_id);
+        LOG_PRINT_ERROR("timer[%u] not exist", timer_id);
         return IPC_HV_SOA_RET_ERR_NOT_EXISTS;
     }
 
@@ -90,7 +90,7 @@ int32_t ipc_hv_soa_timer_delete(uint32_t timer_id)
     auto it = g_client->m_timers_map.find(timer_id);
     if (it == g_client->m_timers_map.end())
     {
-        LOG_PRINT_ERROR("timer[%d] not exist", timer_id);
+        LOG_PRINT_ERROR("timer[%u] not exist", timer_id);
         return IPC_HV_SOA_RET_ERR_NOT_EXISTS;
     }
 

@@ -143,14 +143,14 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
         bool status = pb_decode(&stream, fields, pstruct);
         if (!status)
         {
-            LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
+            LOG_PRINT_ERROR("pb_decode service_id[%u] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
             return;
         }
-        LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+        LOG_PRINT_DEBUG("pb_decode service_id[%u] success", recv_msg_header->service_id);
     }
     else
     {
-        LOG_PRINT_DEBUG("pb_decode service_id[%d] success(no need)");
+        LOG_PRINT_DEBUG("pb_decode service_id[%u] success(no need)", recv_msg_header->service_id);
     }
 
     switch (recv_msg_header->service_id)
@@ -184,7 +184,7 @@ void on_recv_daemon(hio_t *io, void *buf, int readbytes)
                 st_service_change_status *change_status = (st_service_change_status *)pstruct;
                 if (change_status->has_service)
                 {
-                    LOG_PRINT_DEBUG("service change status service_id[%u]-service_status[%d]",
+                    LOG_PRINT_DEBUG("service change status service_id[%u]-service_status[%u]",
                                     change_status->service.service_id, change_status->service.service_status);
                     auto it = find_service(change_status->service.service_id);
                     if (nullptr == it)
@@ -316,7 +316,7 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
 
     uint32_t real_readbytes = (uint32_t)((uint32_t)readbytes - LOCAL_REGISTRY_MSG_HEADER_SIZE);
     st_local_msg_header *recv_msg_header = (st_local_msg_header *)buf;
-    LOG_PRINT_DEBUG("on_recv_process service_id[%u], msg_type[%u], msg_seqid[%d], msg_len[%u]",
+    LOG_PRINT_DEBUG("on_recv_process service_id[%u], msg_type[%u], msg_seqid[%u], msg_len[%u]",
                     recv_msg_header->service_id,
                     recv_msg_header->msg_type,
                     recv_msg_header->msg_seqid,
@@ -369,14 +369,14 @@ void on_recv_process(hio_t *io, void *buf, int readbytes)
         bool status = pb_decode(&stream, fields, pstruct);
         if (!status)
         {
-            LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
+            LOG_PRINT_ERROR("pb_decode service_id[%u] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
             return;
         }
-        LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+        LOG_PRINT_DEBUG("pb_decode service_id[%u] success", recv_msg_header->service_id);
     }
     else
     {
-        LOG_PRINT_DEBUG("pb_decode service_id[%d] success(no need)");
+        LOG_PRINT_DEBUG("pb_decode service_id[%u] success(no need)", recv_msg_header->service_id);
     }
 
     if (recv_msg_header->msg_type != E_IPC_HV_SOA_MSG_TYPE_METHOD_RESPONSE_SYNC)
@@ -453,7 +453,7 @@ void on_connect(hio_t *io)
             std::shared_ptr<ipc_hv_soa_process_client> client = find_process_client(client_id);
             if (nullptr == client)
             {
-                LOG_PRINT_ERROR("invalid client[%d]!", client_id);
+                LOG_PRINT_ERROR("invalid client[%u]!", client_id);
             }
             else
             {
@@ -544,7 +544,7 @@ void on_accept(hio_t *io)
     char src_clientname[LOCAL_REGISTRY_CLIENT_NAME_MAX] = {0};
     if (parse_ipc(peeraddrstr, &src_id, src_clientname, &target_id))
     {
-        LOG_PRINT_DEBUG("src_id[%d], src_clientname[%s], target_id[%d]", src_id, src_clientname, target_id);
+        LOG_PRINT_DEBUG("src_id[%u], src_clientname[%s], target_id[%u]", src_id, src_clientname, target_id);
         std::shared_ptr<ipc_hv_soa_process_client> client = nullptr;
         find_and_save_process_client(src_id, src_clientname, io);
     }

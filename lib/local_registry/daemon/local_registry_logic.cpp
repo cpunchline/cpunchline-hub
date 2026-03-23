@@ -6,7 +6,7 @@ void LocalRegistry::onConnection(const hv::SocketChannelPtr &channel)
     auto registry = LocalRegistry::instance();
     if (channel->isConnected())
     {
-        LOG_PRINT_DEBUG("%s connected! connfd=%d id=%d tid=%ld\n", channel->peeraddr().c_str(), channel->fd(), channel->id(), currentThreadEventLoop->tid());
+        LOG_PRINT_DEBUG("%s connected! connfd=%d id=%u tid=%ld\n", channel->peeraddr().c_str(), channel->fd(), channel->id(), currentThreadEventLoop->tid());
         if (strstr(channel->peeraddr().c_str(), LOCAL_REGISTRY_CTRL_SOCKET_FILE))
         {
             LOG_PRINT_INFO("ctrl connected");
@@ -18,7 +18,7 @@ void LocalRegistry::onConnection(const hv::SocketChannelPtr &channel)
     }
     else
     {
-        LOG_PRINT_DEBUG("%s disconnected! connfd=%d id=%d tid=%ld\n", channel->peeraddr().c_str(), channel->fd(), channel->id(), currentThreadEventLoop->tid());
+        LOG_PRINT_DEBUG("%s disconnected! connfd=%d id=%u tid=%ld\n", channel->peeraddr().c_str(), channel->fd(), channel->id(), currentThreadEventLoop->tid());
         if (strstr(channel->peeraddr().c_str(), LOCAL_REGISTRY_CTRL_SOCKET_FILE))
         {
             LOG_PRINT_INFO("ctrl disconnected");
@@ -97,14 +97,14 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
         bool status = pb_decode(&stream, fields, pstruct);
         if (!status)
         {
-            LOG_PRINT_ERROR("pb_decode service_id[%d] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
+            LOG_PRINT_ERROR("pb_decode service_id[%u] fail, error(%s)", recv_msg_header->service_id, PB_GET_ERROR(&stream));
             return;
         }
-        LOG_PRINT_DEBUG("pb_decode service_id[%d] success", recv_msg_header->service_id);
+        LOG_PRINT_DEBUG("pb_decode service_id[%u] success", recv_msg_header->service_id);
     }
     else
     {
-        LOG_PRINT_DEBUG("pb_decode service_id[%d] success(no need)");
+        LOG_PRINT_DEBUG("pb_decode service_id[%u] success(no need)", recv_msg_header->service_id);
     }
 
     switch (recv_msg_header->service_id)
@@ -170,7 +170,7 @@ void LocalRegistry::onMessage(const hv::SocketChannelPtr &channel, hv::Buffer *i
             break;
         default:
             {
-                LOG_PRINT_ERROR("invalid service_id[%d]", recv_msg_header->service_id);
+                LOG_PRINT_ERROR("invalid service_id[%u]", recv_msg_header->service_id);
             }
             break;
     }
@@ -191,14 +191,14 @@ std::int32_t LocalRegistry::send_msg_to_client(const hv::SocketChannelPtr &clien
         return -1;
     }
 
-    LOG_PRINT_DEBUG("send service_id[%d] to channel_id[%u], fd[%d]", service_id, client_channel->id(), client_channel->fd());
+    LOG_PRINT_DEBUG("send service_id[%u] to channel_id[%u], fd[%d]", service_id, client_channel->id(), client_channel->fd());
 
     size_t encoded_size = 0;
     if (nullptr != msgdata && field_size > 0)
     {
         if (!pb_get_encoded_size(&encoded_size, fields, msgdata))
         {
-            LOG_PRINT_ERROR("pb_get_encoded_size msg_id[%d] fail!", service_id);
+            LOG_PRINT_ERROR("pb_get_encoded_size service_id[%u] fail!", service_id);
             return -1;
         }
     }
@@ -325,8 +325,8 @@ std::int32_t LocalRegistry::remove_client(const hv::SocketChannelPtr &client_cha
         client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
         for (const auto &pair1 : client->client_produce_services)
         {
-            LOG_PRINT_DEBUG("remove_client service_change_status service_id[%d], service_type[%d], service_status[%d]->[%d]",
-                            pair1.second->service_id, pair1.second->service_type, pair1.second->service_status, LOCAL_SERVICE_STATUS_DEFAULT);
+            LOG_PRINT_DEBUG("remove_client service_change_status service_id[%u], service_type[%u], service_status[%u]->[%u]",
+                            pair1.second->service_id, pair1.second->service_type, pair1.second->service_status, (uint32_t)LOCAL_SERVICE_STATUS_DEFAULT);
             for (const auto &pair2 : pair1.second->service_listeners)
             {
                 // 5 service_change_status
@@ -510,7 +510,7 @@ std::int32_t LocalRegistry::register_service(st_register_service *msg)
                     e2c_msg.listener_clients[count].client_id = listener.second->client_id;
                     e2c_msg.listener_clients[count].client_pid = listener.second->client_pid;
                     std::strncpy(e2c_msg.listener_clients[count].client_name, listener.second->client_name.c_str(), sizeof(e2c_msg.listener_clients[count].client_name));
-                    LOG_PRINT_INFO("service_id[%d] add listener[%s]", service_item->service_id, listener.second->client_name.c_str());
+                    LOG_PRINT_INFO("service_id[%u] add listener[%s]", service_item->service_id, listener.second->client_name.c_str());
                     e2c_msg.listener_clients[count].client_status = listener.second->client_status;
                     count++;
                 }
@@ -568,7 +568,7 @@ std::int32_t LocalRegistry::register_service(st_register_service *msg)
             auto it2 = m_services.find(msg->produce_services[i].service_id);
             if (m_services.end() == it2)
             {
-                LOG_PRINT_WARN("no service item[%d]!", msg->produce_services[i].service_id);
+                LOG_PRINT_WARN("no service item[%u]!", msg->produce_services[i].service_id);
                 continue;
             }
             m_services.erase(msg->produce_services[i].service_id);
@@ -577,15 +577,15 @@ std::int32_t LocalRegistry::register_service(st_register_service *msg)
             auto it3 = it1->second->client_produce_services.find(msg->produce_services[i].service_id);
             if (it1->second->client_produce_services.end() == it3)
             {
-                LOG_PRINT_WARN("client[%s] not have service item[%d]!", msg->provider_client.client_name, msg->produce_services[i].service_id);
+                LOG_PRINT_WARN("client[%s] not have service item[%u]!", msg->provider_client.client_name, msg->produce_services[i].service_id);
                 continue;
             }
             it1->second->client_produce_services.erase(msg->produce_services[i].service_id);
 
             // 9 listener_change_to_provider
             std::shared_ptr<local_service_item> service_item = it3->second;
-            LOG_PRINT_DEBUG("delete service service_change_status service_id[%d], service_type[%d], service_status[%d]->[%d]",
-                            service_item->service_id, service_item->service_type, service_item->service_status, LOCAL_SERVICE_STATUS_UNAVAILABLE);
+            LOG_PRINT_DEBUG("delete service service_change_status service_id[%u], service_type[%u], service_status[%u]->[%u]",
+                            service_item->service_id, service_item->service_type, service_item->service_status, (uint32_t)LOCAL_SERVICE_STATUS_UNAVAILABLE);
             for (auto &listener : service_item->service_listeners)
             {
                 if (service_item->service_type == LOCAL_SERVICE_TYPE_METHOD)
@@ -684,7 +684,7 @@ std::int32_t LocalRegistry::listen_service(st_listen_service *msg)
             auto it3 = service_item->service_listeners.find(it1->second->client_id);
             if (service_item->service_listeners.end() == it3)
             {
-                LOG_PRINT_INFO("client[%s] listen service[%d]", it1->second->client_name.c_str(), service_item->service_id);
+                LOG_PRINT_INFO("client[%s] listen service[%u]", it1->second->client_name.c_str(), service_item->service_id);
                 service_item->service_listeners.insert({it1->second->client_id, it1->second});
             }
 
@@ -745,7 +745,7 @@ std::int32_t LocalRegistry::listen_service(st_listen_service *msg)
             std::strncpy(e2c_msg.listener_clients[0].client_name, it1->second->client_name.c_str(), sizeof(e2c_msg.listener_clients[0].client_name));
             e2c_msg.listener_clients[0].client_status = it1->second->client_status;
             e2c_msg.reg = msg->reg;
-            LOG_PRINT_INFO("service_id[%d] add listener[%s]", service_item->service_id, it1->second->client_name.c_str());
+            LOG_PRINT_INFO("service_id[%u] add listener[%s]", service_item->service_id, it1->second->client_name.c_str());
             if (service_item->service_provider->client_status == LOCAL_CLIENT_STATUS_ONLINE)
             {
                 send_msg_to_client(m_server.getChannelById(service_item->service_provider->client_channel_id),
@@ -863,7 +863,7 @@ std::int32_t LocalRegistry::service_set_status(st_service_set_status *msg)
             bool status_changed = false;
             if (it2->second->service_status != msg->services[i].service_status)
             {
-                LOG_PRINT_DEBUG("service_set_status service_change_status service_id[%d], service_type[%d], service_status[%d]->[%d]",
+                LOG_PRINT_DEBUG("service_set_status service_change_status service_id[%u], service_type[%u], service_status[%u]->[%u]",
                                 it2->second->service_id, it2->second->service_type, it2->second->service_status, msg->services[i].service_status);
                 status_changed = true;
                 it2->second->service_status = msg->services[i].service_status;
