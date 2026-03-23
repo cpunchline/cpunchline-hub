@@ -38,13 +38,6 @@ void on_close(hio_t *io)
             g_client->client_status = LOCAL_CLIENT_STATUS_OFFLINE;
         }
 
-        // 如果 connect_ctx 还在等待中(连接未完成就断开),需要通知它
-        if (g_client->connect_ctx)
-        {
-            g_client->connect_ctx->data.ret = IPC_HV_SOA_RET_FAIL;
-            g_client->connect_ctx->SetResult(IPC_HV_SOA_RET_FAIL);
-        }
-
         {
             std::lock_guard<std::mutex> process_clients_map_lock(g_client->process_clients_map_mutex);
             g_client->process_clients_map.erase(g_client->client_id);
