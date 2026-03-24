@@ -6,8 +6,29 @@ set(CPUNCHLINE_VERSION "${CPUNCHLINE_VERSION_MAJOR}.${CPUNCHLINE_VERSION_MINOR}.
 find_package(Git QUIET)
 if(GIT_FOUND)
     execute_process(
+        COMMAND ${GIT_EXECUTABLE} remote get-url origin
+        OUTPUT_VARIABLE GIT_URL
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    execute_process(
         COMMAND ${GIT_EXECUTABLE} branch --show-current
         OUTPUT_VARIABLE BRANCH_NAME
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -n 1 --pretty=format:%an
+        OUTPUT_VARIABLE COMMIT_AUTHOR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -n 1 --pretty=format:%ae
+        OUTPUT_VARIABLE COMMIT_EMAIL
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -33,7 +54,10 @@ string(TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S")
 string(TOLOWER ${PROJECT_NAME} lower_project_name)
 file(WRITE "${CPUNCHLINE_OUTPUT_DIR}/${lower_project_name}_version"
     "${PROJECT_NAME}_VERSION = ${CPUNCHLINE_VERSION}\n"
+    "GIT_URL = ${GIT_URL}\n"
     "BRANCH_NAME = ${BRANCH_NAME}\n"
+    "COMMIT_AUTHOR = ${COMMIT_AUTHOR}\n"
+    "COMMIT_EMAIL = ${COMMIT_EMAIL}\n"
     "COMMTI_ID = ${COMMTI_ID}\n"
     "COMMIT_TIME = ${COMMIT_TIME}\n"
     "BUILD_TIME = ${BUILD_TIME}\n"
