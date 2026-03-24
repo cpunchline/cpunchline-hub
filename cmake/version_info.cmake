@@ -4,10 +4,16 @@ set(CPUNCHLINE_VERSION_PATCH 1)
 set(CPUNCHLINE_VERSION "${CPUNCHLINE_VERSION_MAJOR}.${CPUNCHLINE_VERSION_MINOR}.${CPUNCHLINE_VERSION_PATCH}")
 
 find_package(Git QUIET)
-
 if(GIT_FOUND)
     execute_process(
-        COMMAND ${GIT_EXECUTABLE} log -n 1 --pretty=format:%h
+        COMMAND ${GIT_EXECUTABLE} branch --show-current
+        OUTPUT_VARIABLE BRANCH_NAME
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -n 1 --pretty=format:%H
         OUTPUT_VARIABLE COMMTI_ID
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
@@ -27,6 +33,7 @@ string(TIMESTAMP BUILD_TIME "%Y-%m-%d %H:%M:%S")
 string(TOLOWER ${PROJECT_NAME} lower_project_name)
 file(WRITE "${CPUNCHLINE_OUTPUT_DIR}/${lower_project_name}_version"
     "${PROJECT_NAME}_VERSION = ${CPUNCHLINE_VERSION}\n"
+    "BRANCH_NAME = ${BRANCH_NAME}\n"
     "COMMTI_ID = ${COMMTI_ID}\n"
     "COMMIT_TIME = ${COMMIT_TIME}\n"
     "BUILD_TIME = ${BUILD_TIME}\n"
