@@ -13,9 +13,6 @@
 [submodule "thirdparty/nng"]
 	path = thirdparty/nng
 	url = https://bgithub.xyz/nanomsg/nng.git
-[submodule "thirdparty/shm_container"]
-	path = thirdparty/shm_container
-	url = https://bgithub.xyz/mikewei/shm_container.git
 [submodule "thirdparty/thread-pool"]
 	path = thirdparty/thread-pool
 	url = https://bgithub.xyz/bshoshany/thread-pool.git
