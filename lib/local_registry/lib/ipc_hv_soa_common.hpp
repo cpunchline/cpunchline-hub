@@ -78,6 +78,7 @@ struct ipc_hv_soa_client
     // one connecter(daemon)
     hio_t *m_daemon_io; // LOCAL_REGISTEY_SOCKET_FMT
 
+    std::atomic_uint32_t m_msg_seqid;
     SyncContextPool<ipc_hv_soa_sync_context> daemon_sync_pool{1, 8};
     std::shared_ptr<SyncContext<ipc_hv_soa_sync_context>> connect_ctx;
     std::mutex pending_requests_mutex;
@@ -96,7 +97,6 @@ struct ipc_hv_soa_client
     std::string client_localaddr;                   // daemon connect socket
     std::string client_localaddr1;                  // listen socket
     std::atomic<LOCAL_CLIENT_STATUS> client_status; // 客户端进程运行状态
-    std::atomic_uint32_t m_msg_seqid;
 };
 
 // map
