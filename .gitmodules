@@ -25,3 +25,6 @@
 [submodule "thirdparty/everything-claude-code"]
 	path = thirdparty/everything-claude-code
 	url = https://bgithub.xyz/affaan-m/everything-claude-code
+[submodule "thirdparty/superpowers-zh"]
+	path = thirdparty/superpowers-zh
+	url = https://bgithub.xyz/jnMetaCode/superpowers-zh

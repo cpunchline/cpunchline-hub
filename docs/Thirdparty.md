@@ -67,6 +67,7 @@ git submodule add https://bgithub.xyz/mikewei/ccbase.git thirdparty/ccbase
 
 # AI
 git submodule add https://bgithub.xyz/affaan-m/everything-claude-code thirdparty/everything-claude-code
+git submodule add https://bgithub.xyz/jnMetaCode/superpowers-zh thirdparty/superpowers-zh
 
 ```
   - 查看子模块
@@ -87,10 +88,18 @@ git submodule add https://bgithub.xyz/affaan-m/everything-claude-code thirdparty
 
 ### skills
 
+#### everything-claude-code
+
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/agents .github/agents`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/commands .github/commands`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/rules .github/rules`
 `ln -s ../thirdparty/everything-claude-code/docs/zh-CN/skills .github/skills`
+
+#### superpowers-zh
+
+`ln -s ../thirdparty/superpowers-zh/agents .github/agents`
+`ln -s ../thirdparty/superpowers-zh/skills .github/skills`
+
 `ln -s .github .roo`
 `ln -s .github .qoder`
 
