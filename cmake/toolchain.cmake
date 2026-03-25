@@ -61,6 +61,9 @@ if(NOT MSVC)
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ${CCACHE_PROGRAM})
         set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
         set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -fcolor-diagnostics -Wno-missing-field-initializers")
+        endif()
     endif()
 
     # Reproducible Builds
