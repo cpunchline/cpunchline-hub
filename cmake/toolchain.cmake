@@ -62,7 +62,7 @@ if(NOT MSVC)
         set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
         set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
         if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -fcolor-diagnostics -Wno-missing-field-initializers")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -fcolor-diagnostics")
         endif()
     endif()
 
@@ -83,6 +83,10 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_WARNING_FLAGS} ${FORMAT_WARNING_FLA
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_WARNING_FLAGS} ${FORMAT_WARNING_FLAGS} ${CONVERSION_WARNING_FLAGS} ${LIMIT_WARNING_FLAGS} ${SECRYPT_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}  -Wl,--hash-style=gnu -Wl,--as-needed -Wl,--enable-new-dtags -pie ${SECRYPT_LINKER_FLAGS}")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--hash-style=gnu -Wl,--as-needed -Wl,--enable-new-dtags ${SECRYPT_LINKER_FLAGS}")
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
+endif()
 
 if(NOT CPUNCHLINE_BUILD_THIRDPARTY)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Wfatal-errors")
