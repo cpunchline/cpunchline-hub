@@ -70,8 +70,8 @@ check_tcpdump() {
 
 check_dir_space() {
 	local dir=$1
-	local sizeKB=$(du -sh "${dir}" 2>/dev/null | awk '{print $1}')
-	echo "[${dir}] space is [${sizeKB}]"
+	local size=$(du -sh "${dir}" 2>/dev/null | awk '{print $1}')
+	echo "[${dir}] space is [${size}]"
 
 	# df -Th
 	# df -Th | awk 'NR==1 || !seen[$1]++'
@@ -139,3 +139,5 @@ check_process() {
 	top -b -n 1 | awk '$8!=0'
 	ps -o pid,ppid,vsz,rss,comm | awk '$4>3000'
 }
+
+check_dir_space $1
