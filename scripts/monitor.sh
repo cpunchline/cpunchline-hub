@@ -99,12 +99,14 @@ check_ethernet() {
 
 check_memory() {
 	local memval=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
+	local meminterval_limit=$1
+	local memval_limit=$2
 	[ ! -e "/tmp/memval" ] && {
 		echo "${memval}" >/tmp/memval
 	}
 	local memval_last=$(cat /tmp/memval)
 	local meminterval=$((memval_last - memval))
-	if [ "${meminterval}" -ge 20480 ] || [ "${memval}" -lt 102400 ]; then
+	if [ "${meminterval}" -ge "${meminterval_limit}" ] || [ "${memval}" -lt ${memval_limit} ]; then
 		echo "${memval}" >/tmp/memval
 		echo "--> !!! Memory leak, left ${memval} KB, interval ${meminterval} KB !!!"
 		TZ=CST-8 date >"/tmp/err_memleak"
@@ -139,5 +141,3 @@ check_process() {
 	top -b -n 1 | awk '$8!=0'
 	ps -o pid,ppid,vsz,rss,comm | awk '$4>3000'
 }
-
-check_dir_space $1
