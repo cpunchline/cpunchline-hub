@@ -1,0 +1,299 @@
+{
+    "providerProfiles": {
+        "currentApiConfigName": "gosuncn",
+        "apiConfigs": {
+            "default": {
+                "openAiBaseUrl": "http://192.168.222.10:3000/v1",
+                "openAiApiKey": "token-gosuncn",
+                "openAiModelId": "qwen3",
+                "openAiCustomModelInfo": {
+                    "maxTokens": -1,
+                    "contextWindow": 128000,
+                    "supportsImages": true,
+                    "supportsPromptCache": false,
+                    "inputPrice": 0,
+                    "outputPrice": 0
+                },
+                "openAiHeaders": {},
+                "apiProvider": "openai",
+                "id": "uqvfrswg0ng"
+            }
+        },
+        "modeApiConfigs": {
+            "architect": "uqvfrswg0ng",
+            "code": "uqvfrswg0ng",
+            "ask": "uqvfrswg0ng",
+            "debug": "uqvfrswg0ng",
+            "orchestrator": "uqvfrswg0ng"
+        },
+        "migrations": {
+            "rateLimitSecondsMigrated": true,
+            "openAiHeadersMigrated": true,
+            "consecutiveMistakeLimitMigrated": true,
+            "todoListEnabledMigrated": true,
+            "claudeCodeLegacySettingsMigrated": true
+        }
+    },
+    "globalSettings": {
+        "lastShownAnnouncementId": "mar-2026-v3.51.0-gpt-54-slash-skills",
+        "openRouterImageApiKey": "",
+        "openRouterImageGenerationSelectedModel": "",
+        "autoApprovalEnabled": true,
+        "alwaysAllowReadOnly": true,
+        "alwaysAllowReadOnlyOutsideWorkspace": true,
+        "alwaysAllowWrite": true,
+        "alwaysAllowWriteOutsideWorkspace": true,
+        "alwaysAllowWriteProtected": true,
+        "writeDelayMs": 1000,
+        "alwaysAllowMcp": true,
+        "alwaysAllowModeSwitch": true,
+        "alwaysAllowSubtasks": true,
+        "alwaysAllowExecute": true,
+        "alwaysAllowFollowupQuestions": true,
+        "followupAutoApproveTimeoutMs": 60000,
+        "allowedCommands": [
+            "cd",
+            "echo",
+            "ls",
+            "dir",
+            "pwd",
+            "cat",
+            "head",
+            "tail",
+            "findstr",
+            "wc",
+            "tr",
+            "cut",
+            "cmp",
+            "which",
+            "basename",
+            "dirname",
+            "realpath",
+            "readlink",
+            "stat",
+            "file",
+            "od",
+            "du",
+            "df",
+            "sleep",
+            "nl",
+            "grep",
+            "git",
+            "docker",
+            "column",
+            "date",
+            "find",
+            "rg",
+            "sed",
+            "sort",
+            "tree",
+            "rm",
+            "rmdir",
+            "del",
+            "ri",
+            "rd",
+            "erase",
+            "dd",
+            "kill",
+            "ps",
+            "top",
+            "spps",
+            "taskkill",
+            "curl",
+            "wget",
+            "chmod",
+            "chown",
+            "jq",
+            "xargs",
+            "eqal",
+            "cmake"
+        ],
+        "deniedCommands": [],
+        "allowedMaxRequests": null,
+        "allowedMaxCost": null,
+        "autoCondenseContext": true,
+        "autoCondenseContextPercent": 100,
+        "includeCurrentTime": true,
+        "includeCurrentCost": true,
+        "maxGitStatusFiles": 0,
+        "includeDiagnosticMessages": true,
+        "maxDiagnosticMessages": 50,
+        "enableCheckpoints": false,
+        "checkpointTimeout": 15,
+        "ttsEnabled": false,
+        "ttsSpeed": 1,
+        "soundEnabled": false,
+        "soundVolume": 0.5,
+        "maxOpenTabsContext": 20,
+        "maxWorkspaceFiles": 200,
+        "showRooIgnoredFiles": true,
+        "enableSubfolderRules": false,
+        "maxImageFileSize": 5,
+        "maxTotalImageSize": 20,
+        "terminalOutputPreviewSize": "large",
+        "terminalShellIntegrationTimeout": 5000,
+        "terminalShellIntegrationDisabled": true,
+        "terminalCommandDelay": 0,
+        "terminalPowershellCounter": false,
+        "terminalZshClearEolMark": true,
+        "terminalZshOhMy": false,
+        "terminalZshP10k": false,
+        "terminalZdotdir": false,
+        "experiments": {
+            "preventFocusDisruption": false,
+            "imageGeneration": false,
+            "runSlashCommand": true,
+            "customTools": false
+        },
+        "codebaseIndexModels": {
+            "openai": {
+                "text-embedding-3-small": {
+                    "dimension": 1536
+                },
+                "text-embedding-3-large": {
+                    "dimension": 3072
+                },
+                "text-embedding-ada-002": {
+                    "dimension": 1536
+                }
+            },
+            "ollama": {
+                "nomic-embed-text": {
+                    "dimension": 768
+                },
+                "nomic-embed-code": {
+                    "dimension": 3584
+                },
+                "mxbai-embed-large": {
+                    "dimension": 1024
+                },
+                "all-minilm": {
+                    "dimension": 384
+                }
+            },
+            "openai-compatible": {
+                "text-embedding-3-small": {
+                    "dimension": 1536
+                },
+                "text-embedding-3-large": {
+                    "dimension": 3072
+                },
+                "text-embedding-ada-002": {
+                    "dimension": 1536
+                },
+                "nomic-embed-code": {
+                    "dimension": 3584
+                }
+            },
+            "gemini": {
+                "gemini-embedding-001": {
+                    "dimension": 3072
+                },
+                "text-embedding-004": {
+                    "dimension": 3072
+                }
+            },
+            "mistral": {
+                "codestral-embed-2505": {
+                    "dimension": 1536
+                }
+            },
+            "vercel-ai-gateway": {
+                "openai/text-embedding-3-small": {
+                    "dimension": 1536
+                },
+                "openai/text-embedding-3-large": {
+                    "dimension": 3072
+                },
+                "openai/text-embedding-ada-002": {
+                    "dimension": 1536
+                },
+                "cohere/embed-v4.0": {
+                    "dimension": 1024
+                },
+                "google/gemini-embedding-001": {
+                    "dimension": 3072
+                },
+                "google/text-embedding-005": {
+                    "dimension": 768
+                },
+                "google/text-multilingual-embedding-002": {
+                    "dimension": 768
+                },
+                "amazon/titan-embed-text-v2": {
+                    "dimension": 1024
+                },
+                "mistral/codestral-embed": {
+                    "dimension": 1536
+                },
+                "mistral/mistral-embed": {
+                    "dimension": 1024
+                }
+            },
+            "openrouter": {
+                "openai/text-embedding-3-small": {
+                    "dimension": 1536
+                },
+                "openai/text-embedding-3-large": {
+                    "dimension": 3072
+                },
+                "openai/text-embedding-ada-002": {
+                    "dimension": 1536
+                },
+                "google/gemini-embedding-001": {
+                    "dimension": 3072
+                },
+                "mistralai/mistral-embed-2312": {
+                    "dimension": 1024
+                },
+                "mistralai/codestral-embed-2505": {
+                    "dimension": 1536
+                },
+                "qwen/qwen3-embedding-0.6b": {
+                    "dimension": 1024
+                },
+                "qwen/qwen3-embedding-4b": {
+                    "dimension": 2560
+                },
+                "qwen/qwen3-embedding-8b": {
+                    "dimension": 4096
+                }
+            },
+            "bedrock": {
+                "amazon.titan-embed-text-v1": {
+                    "dimension": 1536
+                },
+                "amazon.titan-embed-text-v2:0": {
+                    "dimension": 1024
+                },
+                "amazon.titan-embed-image-v1": {
+                    "dimension": 1024
+                },
+                "amazon.nova-2-multimodal-embeddings-v1:0": {
+                    "dimension": 1024
+                },
+                "cohere.embed-v4:0": {
+                    "dimension": 1536
+                },
+                "cohere.embed-english-v3": {
+                    "dimension": 1024
+                },
+                "cohere.embed-multilingual-v3": {
+                    "dimension": 1024
+                }
+            }
+        },
+        "language": "zh-CN",
+        "telemetrySetting": "enabled",
+        "mcpEnabled": true,
+        "mode": "architect",
+        "customModes": [],
+        "customSupportPrompts": {},
+        "includeTaskHistoryInEnhance": true,
+        "reasoningBlockCollapsed": true,
+        "enterBehavior": "send",
+        "profileThresholds": {},
+        "hasOpenedModeSelector": true,
+        "lastSettingsExportPath": "~/cpunchline-hub/docs/roo-code-settings.json"
+    }
+}
