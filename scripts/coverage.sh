@@ -34,9 +34,9 @@ lcov -b ${SOURCE_DIR} \
 	--function-coverage \
 	--checksum \
 	--demangle-cpp \
+	--ignore-errors mismatch \
 	-o ${COVERAGE_REPORT_DIR}/coverage.info \
 	-j $(nproc)
-lcov --remove ${COVERAGE_REPORT_DIR}/coverage.info '*/thirdparty/*'
 lcov --list ${COVERAGE_REPORT_DIR}/coverage.info
 
 genhtml \
