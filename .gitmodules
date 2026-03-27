@@ -28,3 +28,6 @@
 [submodule "thirdparty/superpowers-zh"]
 	path = thirdparty/superpowers-zh
 	url = https://bgithub.xyz/jnMetaCode/superpowers-zh
+[submodule "thirdparty/googletest"]
+	path = thirdparty/googletest
+	url = https://bgithub.xyz/google/googletest.git

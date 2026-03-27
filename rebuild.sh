@@ -28,17 +28,20 @@ BUILD_DIR=${ROOT_DIR}/build
 
 usage() {
 	logwarn "Usage: $0 [options]"
-	logwarn "    -d|--debug        build debug."
-	logwarn "    -r|--release      build release."
-	logwarn "    -c|--check        cppcheck and codeline."
-	logwarn "    -3rd|--thirdparty build thirdparty."
-	logwarn "    -h|--help         show help info."
+	logwarn "    -d|--debug          build debug."
+	logwarn "    -r|--release        build release."
+	logwarn "    -c|--check          cppcheck and codeline."
+	logwarn "    -3rd|--thirdparty   build thirdparty."
+	logwarn "    -tc|--coverage      build tests and coverage."
+	logwarn "    -h|--help           show help info."
 }
 
 INPUT_CMAKE_BUILD_TYPE=""
 INPUT_CMAKE_CHECK=""
 INPUT_CMAKE_TARGET=""
 INPUT_CMAKE_BUILD_THIRDPARTY=""
+INPUT_CMAKE_TESTS=""
+INPUT_CMAKE_CONVERAGE=""
 
 while (($#)); do
 	case $1 in
@@ -68,6 +71,11 @@ while (($#)); do
 		INPUT_CMAKE_BUILD_THIRDPARTY="ON"
 		shift 1
 		;;
+	-tc | --coverage)
+		INPUT_CMAKE_TESTS="ON"
+		INPUT_CMAKE_CONVERAGE="ON"
+		shift 1
+		;;
 	-h | --help)
 		usage
 		exit 0
@@ -83,11 +91,15 @@ done
 : "${INPUT_CMAKE_TARGET:=all}"
 : "${INPUT_CMAKE_BUILD_THIRDPARTY:=OFF}"
 : "${INPUT_CMAKE_CHECK:=OFF}"
+: "${INPUT_CMAKE_TESTS:=OFF}"
+: "${INPUT_CMAKE_CONVERAGE:=OFF}"
 
 logwarn "-- INPUT_CMAKE_BUILD_TYPE=${INPUT_CMAKE_BUILD_TYPE}"
 logwarn "-- INPUT_CMAKE_TARGET=${INPUT_CMAKE_TARGET}"
 logwarn "-- INPUT_CMAKE_CHECK=${INPUT_CMAKE_CHECK}"
 logwarn "-- INPUT_CMAKE_BUILD_THIRDPARTY=${INPUT_CMAKE_BUILD_THIRDPARTY}"
+logwarn "-- INPUT_CMAKE_TESTS=${INPUT_CMAKE_TESTS}"
+logwarn "-- INPUT_CMAKE_CONVERAGE=${INPUT_CMAKE_CONVERAGE}"
 
 export CCACHE_DIR=${ROOT_DIR}/.cache # ccache cache
 
@@ -100,7 +112,9 @@ cmake \
 	-DCMAKE_BUILD_TYPE="${INPUT_CMAKE_BUILD_TYPE}" \
 	-DCMAKE_C_COMPILER=clang \
 	-DCMAKE_CXX_COMPILER=clang++ \
-	-DCPUNCHLINE_BUILD_THIRDPARTY="${INPUT_CMAKE_BUILD_THIRDPARTY}"
+	-DCPUNCHLINE_BUILD_THIRDPARTY="${INPUT_CMAKE_BUILD_THIRDPARTY}" \
+	-DCPUNCHLINE_BUILD_TESTS="${INPUT_CMAKE_TESTS}" \
+	-DCPUNCHLINE_BUILD_COVERAGE="${INPUT_CMAKE_CONVERAGE}"
 [ $? -eq 0 ] || {
 	logerr "cmake config fail!"
 	exit 1
@@ -110,7 +124,7 @@ cmake \
 	--build "${BUILD_DIR}" \
 	--target "${INPUT_CMAKE_TARGET}" \
 	--parallel $(nproc)
-	# 2> >(cat >&2) | grep -v "Up-to-date"
+# 2> >(cat >&2) | grep -v "Up-to-date"
 [ $? -eq 0 ] || {
 	logerr "cmake build fail!"
 	exit 1

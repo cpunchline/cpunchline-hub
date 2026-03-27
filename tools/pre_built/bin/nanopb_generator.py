@@ -5,9 +5,9 @@ import os.path
 
 # CMakeLists.txt can provide this file the path to Python module installation
 # location. It is used as a relative path. By default only system path is used.
-python_instdir = r"/home/cpunchline/cpunchline-hub/tools/pre_built"
+python_instdir = r"/home/liuzepeng/cpunchline-hub/tools/pre_built"
 cmake_bindir = r"bin"
-cmake_install_prefix = r"/home/cpunchline/cpunchline-hub/tools/pre_built"
+cmake_install_prefix = r"/home/liuzepeng/cpunchline-hub/tools/pre_built"
 if python_instdir[0] != '@':
     python_instdir = os.path.join(cmake_install_prefix, python_instdir)
     cmake_bindir = os.path.join(cmake_install_prefix, cmake_bindir)

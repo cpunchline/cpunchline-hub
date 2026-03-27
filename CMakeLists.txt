@@ -7,6 +7,7 @@ project(CPUNCHLINE LANGUAGES C CXX)
 # 法二: 删build/CMakeCache.txt重新编译
 
 option(CPUNCHLINE_BUILD_TESTS "Whether or not to build the tests" OFF)
+option(CPUNCHLINE_BUILD_COVERAGE "Whether or not to build the tests" OFF)
 option(CPUNCHLINE_BUILD_THIRDPARTY "Whether or not to build the thirdparty" OFF)
 
 set(CPUNCHLINE_ROOT_DIR ${PROJECT_SOURCE_DIR})
@@ -41,7 +42,7 @@ include(version_info)
 
 configure_file(${CPUNCHLINE_INCLUDE_DIR}/cpunchline_version.h.in ${CPUNCHLINE_INCLUDE_DIR}/cpunchline_version_auto.h)
 
-set(LIB_GOOGLETEST_OPTION OFF)
+set(LIB_GOOGLETEST_OPTION ON)
 set(LIB_HV_OPTION ON)
 set(LIB_LOCKFREE_MPMC_QUEUE_OPTION OFF)
 set(LIB_CONCURRENTQUEUE_OPTION ON)
