@@ -18,15 +18,25 @@ command -v lcov >/dev/null 2>&1 || {
 }
 
 ${SOURCE_DIR}/rebuild.sh -d -tc
-lcov -b ${SOURCE_DIR} \
-	--build-directory ${BUILD_DIR} \
-	-d ${BUILD_DIR} \
+lcov -d ${BUILD_DIR} \
 	-z
+
+lcov -b ${SOURCE_DIR} \
+	-d ${BUILD_DIR} \
+	-c \
+	--no-external \
+	--initial \
+	--branch-coverage \
+	--function-coverage \
+	--checksum \
+	--demangle-cpp \
+	--ignore-errors mismatch \
+	-o ${COVERAGE_REPORT_DIR}/coverage_init.info \
+	-j $(nproc)
 
 ${SOURCE_DIR}/build/tests/gtest_app
 
 lcov -b ${SOURCE_DIR} \
-	--build-directory ${BUILD_DIR} \
 	-d ${BUILD_DIR} \
 	-c \
 	--no-external \
@@ -49,4 +59,5 @@ genhtml \
 	-p ${SOURCE_DIR} \
 	--title "${PROJECT_NAME}-$(date \+%F_%T)" \
 	-o ${COVERAGE_REPORT_DIR} \
+	${COVERAGE_REPORT_DIR}/coverage_init.info \
 	${COVERAGE_REPORT_DIR}/coverage.info
